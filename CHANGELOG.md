@@ -19,6 +19,8 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
   - Debug instrumentation guidance now documents inferred metrics and
     host-supplied hardware hints instead of claiming unavailable portable
     WebGPU counters.
+  - Updated package maintenance guidance to use the Node 24 baseline reflected in
+    `.nvmrc`.
 
 - **Fixed**
   - N/A
