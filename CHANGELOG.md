@@ -23,6 +23,20 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 ## [0.1.0] - 2026-03-13
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.1.0] - 2026-03-13
+
+- **Added**
   - Initial `@plasius/gpu-debug` package scaffold based on the Plasius package
     standard.
   - Opt-in debug session API for tracked allocations, queue samples, dispatch
