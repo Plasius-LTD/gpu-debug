@@ -14,11 +14,15 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
   - Opt-in debug session API for tracked allocations, queue samples, dispatch
     samples, and frame-budget summaries.
   - ADRs, TDRs, design docs, unit tests, and a runnable console demo.
+  - Standard GitHub CI/CD and scheduled npm audit workflows for package
+    validation and release automation.
 
 - **Changed**
   - Debug instrumentation guidance now documents inferred metrics and
     host-supplied hardware hints instead of claiming unavailable portable
     WebGPU counters.
+  - Added repository release-automation guidance reflecting the new GitHub
+    workflow set.
   - Updated package maintenance guidance to use the Node 24 baseline reflected in
     `.nvmrc`.
 

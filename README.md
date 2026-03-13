@@ -136,6 +136,15 @@ npm run build
 npm run pack:check
 ```
 
+## Release Automation
+
+GitHub Actions now carries the package delivery path:
+
+- CI runs on pushes and pull requests to enforce lint, typecheck, audit, build,
+  coverage, and package verification.
+- CD publishes to npm only through the manual GitHub workflow.
+- A scheduled workflow opens monthly npm audit-fix pull requests.
+
 ## Files
 
 - `src/types.ts`: public debug types and snapshot contracts.
