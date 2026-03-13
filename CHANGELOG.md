@@ -16,6 +16,8 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
   - ADRs, TDRs, design docs, unit tests, and a runnable console demo.
   - Standard GitHub CI/CD and scheduled npm audit workflows for package
     validation and release automation.
+  - Consumer guidance for correlating `@plasius/gpu-worker` dispatch samples
+    and frame ids inside a local debug session.
 
 - **Changed**
   - Debug instrumentation guidance now documents inferred metrics and

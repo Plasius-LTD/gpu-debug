@@ -5,6 +5,8 @@
 - Use stable worker job labels for `jobType`.
 - Use bounded queue class labels for `queueClass`.
 - Record queue depth and dispatch samples around worklist execution.
+- Prefer `createWorkerLoop({ frameId, telemetry })` so dispatch samples carry
+  shared `frameId` values and stable worker metadata without extra glue code.
 
 ## With `@plasius/gpu-performance`
 

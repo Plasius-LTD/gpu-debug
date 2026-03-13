@@ -111,6 +111,63 @@ an inferred optimization aid rather than a full hardware profiler.
 - `createGpuDebugSession(options?)`
 - `estimateDispatchInvocations(sample)`
 
+## Worker and Frame Correlation
+
+When worker-based packages use `@plasius/gpu-worker`, prefer passing stable
+metadata and a shared `frameId` through the worker loop telemetry hooks.
+
+```ts
+import { createGpuDebugSession } from "@plasius/gpu-debug";
+import { createWorkerLoop } from "@plasius/gpu-worker";
+
+const debug = createGpuDebugSession({ enabled: true });
+
+const loop = createWorkerLoop({
+  device,
+  frameId: () => `frame-${frameNumber}`,
+  worker: {
+    pipeline: workerPipeline,
+    workgroups: [2, 1, 1],
+    workgroupSize: 64,
+    owner: "particles",
+    queueClass: "simulation",
+    jobType: "worker.dequeue",
+  },
+  jobs: [
+    {
+      pipeline: simulatePipeline,
+      workgroupCount: [64, 1, 1],
+      workgroupSize: [64, 1, 1],
+      owner: "particles",
+      queueClass: "simulation",
+      jobType: "particles.simulate",
+    },
+  ],
+  telemetry: {
+    onDispatch(sample) {
+      debug.recordDispatch({
+        owner: sample.owner,
+        queueClass: sample.queueClass,
+        jobType: sample.jobType,
+        frameId: sample.frameId,
+        workgroups: sample.workgroups,
+        workgroupSize: sample.workgroupSize,
+      });
+    },
+  },
+});
+
+debug.recordFrame({
+  frameId: `frame-${frameNumber}`,
+  frameTimeMs,
+  targetFrameTimeMs,
+});
+```
+
+This keeps the package local-first: `@plasius/gpu-worker` emits local samples,
+`@plasius/gpu-debug` stores and summarizes them, and any remote export still
+belongs to `@plasius/analytics`.
+
 ## Analytics Integration
 
 This package does not ship its own analytics client. If snapshots or events need

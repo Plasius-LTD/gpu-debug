@@ -36,6 +36,10 @@ The package does not depend on `@plasius/gpu-worker` or
 `@plasius/gpu-performance` directly; it stays framework-agnostic and typed
 through shared string contracts.
 
+The preferred worker-side integration path is now
+`createWorkerLoop({ frameId, telemetry })`, which can emit locally scoped
+dispatch samples that map directly into `recordDispatch(...)`.
+
 ## Data Contracts
 
 - stable `owner`
@@ -56,6 +60,8 @@ through shared string contracts.
 
 1. Start with package-local allocation and dispatch reporting.
 2. Add shared `frameId` correlation where runtime wiring already exists.
+   Example: feed `createWorkerLoop(..., { telemetry.onDispatch })` samples into
+   `createGpuDebugSession().recordDispatch(...)`.
 3. Expand adoption across new worker-based effect packages.
 
 ## Risks and Mitigations
