@@ -9,6 +9,20 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.1.1] - 2026-03-14
+
+- **Added**
   - `recordReadyLane(...)` and `recordDependencyUnlock(...)` session APIs for
     DAG-ready queue diagnostics.
   - `snapshot.dag` summaries covering ready-lane depth, utilization, and
@@ -68,3 +82,4 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 
 
 [0.1.0]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.1.0
+[0.1.1]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.1.1
