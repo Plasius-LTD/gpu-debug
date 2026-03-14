@@ -16,9 +16,10 @@ stack.
 
 ## Decision
 
-`@plasius/gpu-debug` will expose local session APIs only. If snapshots need to
-be exported, batching, transport, queueing, and persistence must go through
-`@plasius/analytics`.
+`@plasius/gpu-debug` will expose local session APIs only. That includes
+allocation, queue, dispatch, frame, ready-lane, and dependency-unlock sample
+collection. If snapshots need to be exported, batching, transport, queueing,
+and persistence must go through `@plasius/analytics`.
 
 ## Consequences
 

@@ -9,10 +9,14 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - `recordReadyLane(...)` and `recordDependencyUnlock(...)` session APIs for
+    DAG-ready queue diagnostics.
+  - `snapshot.dag` summaries covering ready-lane depth, utilization, and
+    downstream unlock activity.
 
 - **Changed**
-  - (placeholder)
+  - Integration docs now describe how DAG worker schedulers can feed lane-depth
+    and dependency-unlock samples into the local debug session.
 
 - **Fixed**
   - (placeholder)

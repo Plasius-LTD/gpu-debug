@@ -25,6 +25,8 @@ npm install @plasius/gpu-debug
 
 - Exposes tracked GPU allocation totals by owner and category.
 - Records queue depth, dispatch timings, and estimated invocation counts.
+- Records DAG-ready lane depth and dependency-unlock activity when integrations
+  supply those samples.
 - Summarizes frame-budget pressure alongside dispatch activity.
 - Accepts optional host-supplied hardware hints such as memory capacity or core
   count when a native or privileged runtime can provide them.
@@ -63,6 +65,16 @@ debug.recordQueue({
   frameId: "frame-101",
 });
 
+debug.recordReadyLane({
+  owner: "lighting",
+  queueClass: "lighting",
+  laneId: "priority-4",
+  priority: 4,
+  depth: 5,
+  capacity: 8,
+  frameId: "frame-101",
+});
+
 debug.recordDispatch({
   id: "dispatch-101-post",
   owner: "post-processing",
@@ -74,6 +86,15 @@ debug.recordDispatch({
   workgroupSize: { x: 8, y: 8, z: 1 },
   bytesRead: 2_097_152,
   bytesWritten: 1_048_576,
+});
+
+debug.recordDependencyUnlock({
+  owner: "lighting",
+  queueClass: "lighting",
+  sourceJobType: "lighting.direct",
+  unlockedJobType: "lighting.resolve",
+  priority: 2,
+  frameId: "frame-101",
 });
 
 debug.recordFrame({
@@ -100,6 +121,7 @@ Portable WebGPU does not currently guarantee authoritative access to:
 - tracked allocations reported by the caller,
 - estimated invocation and workgroup totals from dispatch metadata,
 - queue-depth and frame-budget summaries,
+- DAG-ready lane and dependency-unlock summaries when integrations report them,
 - optional hardware hints provided by the host runtime.
 
 If a native shell, browser extension, or proprietary platform layer can provide
@@ -167,6 +189,30 @@ debug.recordFrame({
 This keeps the package local-first: `@plasius/gpu-worker` emits local samples,
 `@plasius/gpu-debug` stores and summarizes them, and any remote export still
 belongs to `@plasius/analytics`.
+
+For DAG-enabled integrations, callers can also feed ready-lane and dependency
+unlock data into the same session:
+
+```ts
+debug.recordReadyLane({
+  owner: "lighting",
+  queueClass: "lighting",
+  laneId: "priority-3",
+  priority: 3,
+  depth: 2,
+  capacity: 8,
+  frameId: `frame-${frameNumber}`,
+});
+
+debug.recordDependencyUnlock({
+  owner: "lighting",
+  queueClass: "lighting",
+  sourceJobType: "lighting.cache",
+  unlockedJobType: "lighting.resolve",
+  priority: 2,
+  frameId: `frame-${frameNumber}`,
+});
+```
 
 ## Analytics Integration
 

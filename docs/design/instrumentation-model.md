@@ -12,7 +12,9 @@ The package uses a single session object that stores bounded local histories for
 
 - tracked allocations,
 - queue samples,
+- ready-lane samples,
 - dispatch samples,
+- dependency-unlock samples,
 - frame samples.
 
 ## Snapshot Semantics
@@ -21,6 +23,8 @@ The package uses a single session object that stores bounded local histories for
 - Dispatch summaries derive workgroup and invocation estimates from supplied
   metadata.
 - Queue summaries describe pressure and capacity where the caller provides it.
+- DAG summaries describe ready-lane pressure and downstream unlock flow where
+  the caller reports those events.
 - Frame summaries describe budget pressure and optional GPU busy time.
 
 ## Hardware Hints

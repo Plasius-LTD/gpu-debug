@@ -29,6 +29,8 @@ frame-budget regimes are active.
 - `queueClass` groups worker lanes such as render, simulation, lighting, and
   post-processing.
 - `jobType` aligns dispatch samples with stable worker job labels.
+- `laneId` and optional `priority` identify DAG-ready queues when integrations
+  need to explain multi-root scheduling pressure.
 - frame samples can be correlated with `@plasius/gpu-performance` negotiated
   targets and decisions outside this package.
 
@@ -39,12 +41,16 @@ through shared string contracts.
 The preferred worker-side integration path is now
 `createWorkerLoop({ frameId, telemetry })`, which can emit locally scoped
 dispatch samples that map directly into `recordDispatch(...)`.
+Queue runtimes or higher-level bridges may also feed `recordReadyLane(...)` and
+`recordDependencyUnlock(...)` when DAG schedulers expose lane depth or
+downstream unlock activity.
 
 ## Data Contracts
 
 - stable `owner`
 - stable `queueClass`
 - stable `jobType`
+- stable `laneId` for ready-queue diagnostics when applicable
 - `frameId` correlation ids across dispatch, queue, and frame samples
 
 ## Operational Considerations
@@ -62,7 +68,9 @@ dispatch samples that map directly into `recordDispatch(...)`.
 2. Add shared `frameId` correlation where runtime wiring already exists.
    Example: feed `createWorkerLoop(..., { telemetry.onDispatch })` samples into
    `createGpuDebugSession().recordDispatch(...)`.
-3. Expand adoption across new worker-based effect packages.
+3. Add DAG-ready lane and dependency-unlock reporting where queue integrations
+   expose that data.
+4. Expand adoption across new worker-based effect packages.
 
 ## Risks and Mitigations
 

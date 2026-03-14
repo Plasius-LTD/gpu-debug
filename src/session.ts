@@ -1,12 +1,15 @@
 import type {
+  GpuDebugDagSnapshot,
   GpuDebugDispatchSnapshot,
   GpuDebugQueueSnapshot,
   GpuDebugSession,
   GpuDebugSessionOptions,
   GpuDebugSnapshot,
+  GpuDependencyUnlockSample,
   GpuDispatchSample,
   GpuFrameSample,
   GpuQueueSample,
+  GpuReadyLaneSample,
   GpuResourceCategory,
   TrackedGpuAllocation,
 } from "./types.js";
@@ -27,6 +30,8 @@ const DEFAULT_OPTIONS = Object.freeze({
   enabled: false,
   maxRetainedDispatches: 240,
   maxRetainedQueueSamples: 240,
+  maxRetainedReadyLaneSamples: 240,
+  maxRetainedDependencyUnlockSamples: 240,
   maxRetainedFrameSamples: 240,
   maxTrackedAllocations: 512,
 });
@@ -35,6 +40,7 @@ const LIMITATIONS = Object.freeze([
   "Tracked memory reflects only allocations reported to this debug session.",
   "Portable WebGPU does not expose authoritative live GPU core-count or total-memory counters.",
   "Hardware hints are optional caller-supplied metadata and may be platform-specific.",
+  "Ready-lane and dependency-unlock diagnostics are caller-reported integration samples, not automatic WebGPU counters.",
 ]);
 
 interface NormalizedAllocation extends Omit<TrackedGpuAllocation, "signal"> {
@@ -43,12 +49,22 @@ interface NormalizedAllocation extends Omit<TrackedGpuAllocation, "signal"> {
 
 type NormalizedQueueSample = Omit<GpuQueueSample, "signal">;
 
+interface NormalizedReadyLaneSample extends Omit<GpuReadyLaneSample, "signal"> {
+  priority?: number;
+}
+
 interface NormalizedDispatchSample extends Omit<GpuDispatchSample, "signal"> {
   workgroups: { x: number; y: number; z: number };
   workgroupSize: { x: number; y: number; z: number };
 }
 
 type NormalizedFrameSample = Omit<GpuFrameSample, "signal">;
+
+interface NormalizedDependencyUnlockSample
+  extends Omit<GpuDependencyUnlockSample, "signal"> {
+  priority?: number;
+  unlockCount: number;
+}
 
 function clampCount(value: number | undefined, fallback: number): number {
   if (!value || !Number.isFinite(value) || value <= 0) {
@@ -129,6 +145,43 @@ function normalizeQueueSample(sample: GpuQueueSample): NormalizedQueueSample {
   };
 }
 
+function normalizeReadyLaneSample(
+  sample: GpuReadyLaneSample
+): NormalizedReadyLaneSample {
+  if (sample.signal !== undefined && !isAbortSignalLike(sample.signal)) {
+    throw new Error("readyLane.signal must be an AbortSignal when provided.");
+  }
+
+  const capacity = readPositiveInteger("readyLane.capacity", sample.capacity);
+  const depth = readNonNegativeNumber("readyLane.depth", sample.depth) ?? 0;
+
+  if (capacity !== undefined && depth > capacity) {
+    throw new Error("readyLane.depth cannot exceed readyLane.capacity.");
+  }
+
+  const priority = readNonNegativeNumber("readyLane.priority", sample.priority);
+  if (priority !== undefined && !Number.isInteger(priority)) {
+    throw new Error("readyLane.priority must be an integer greater than or equal to zero.");
+  }
+
+  return {
+    owner: assertIdentifier("readyLane.owner", sample.owner),
+    queueClass: assertEnumValue(
+      "readyLane.queueClass",
+      sample.queueClass,
+      gpuDebugQueueClasses
+    ),
+    laneId: assertIdentifier("readyLane.laneId", sample.laneId),
+    priority,
+    depth,
+    capacity,
+    frameId:
+      sample.frameId === undefined
+        ? undefined
+        : assertIdentifier("readyLane.frameId", sample.frameId),
+  };
+}
+
 function normalizeDispatchSample(
   sample: GpuDispatchSample
 ): NormalizedDispatchSample {
@@ -185,6 +238,48 @@ function normalizeFrameSample(sample: GpuFrameSample): NormalizedFrameSample {
   };
 }
 
+function normalizeDependencyUnlockSample(
+  sample: GpuDependencyUnlockSample
+): NormalizedDependencyUnlockSample {
+  if (sample.signal !== undefined && !isAbortSignalLike(sample.signal)) {
+    throw new Error("dependencyUnlock.signal must be an AbortSignal when provided.");
+  }
+
+  const priority = readNonNegativeNumber(
+    "dependencyUnlock.priority",
+    sample.priority
+  );
+  if (priority !== undefined && !Number.isInteger(priority)) {
+    throw new Error(
+      "dependencyUnlock.priority must be an integer greater than or equal to zero."
+    );
+  }
+
+  return {
+    owner: assertIdentifier("dependencyUnlock.owner", sample.owner),
+    queueClass: assertEnumValue(
+      "dependencyUnlock.queueClass",
+      sample.queueClass,
+      gpuDebugQueueClasses
+    ),
+    sourceJobType: assertIdentifier(
+      "dependencyUnlock.sourceJobType",
+      sample.sourceJobType
+    ),
+    unlockedJobType: assertIdentifier(
+      "dependencyUnlock.unlockedJobType",
+      sample.unlockedJobType
+    ),
+    priority,
+    unlockCount:
+      readPositiveInteger("dependencyUnlock.unlockCount", sample.unlockCount) ?? 1,
+    frameId:
+      sample.frameId === undefined
+        ? undefined
+        : assertIdentifier("dependencyUnlock.frameId", sample.frameId),
+  };
+}
+
 export function estimateDispatchInvocations(sample: GpuDispatchSample): number {
   const normalized = normalizeDispatchSample(sample);
   return (
@@ -210,6 +305,14 @@ export function createGpuDebugSession(
       options.maxRetainedQueueSamples,
       DEFAULT_OPTIONS.maxRetainedQueueSamples
     ),
+    maxRetainedReadyLaneSamples: clampCount(
+      options.maxRetainedReadyLaneSamples,
+      DEFAULT_OPTIONS.maxRetainedReadyLaneSamples
+    ),
+    maxRetainedDependencyUnlockSamples: clampCount(
+      options.maxRetainedDependencyUnlockSamples,
+      DEFAULT_OPTIONS.maxRetainedDependencyUnlockSamples
+    ),
     maxRetainedFrameSamples: clampCount(
       options.maxRetainedFrameSamples,
       DEFAULT_OPTIONS.maxRetainedFrameSamples
@@ -225,7 +328,9 @@ export function createGpuDebugSession(
   const allocations = new Map<string, NormalizedAllocation>();
   const allocationOrder: string[] = [];
   const queueSamples: NormalizedQueueSample[] = [];
+  const readyLaneSamples: NormalizedReadyLaneSample[] = [];
   const dispatchSamples: NormalizedDispatchSample[] = [];
+  const dependencyUnlockSamples: NormalizedDependencyUnlockSample[] = [];
   const frameSamples: NormalizedFrameSample[] = [];
   let peakTrackedBytes = 0;
 
@@ -351,6 +456,105 @@ export function createGpuDebugSession(
     };
   };
 
+  const buildDagSnapshot = (): GpuDebugDagSnapshot => {
+    const laneDepths = readyLaneSamples.map((sample) => sample.depth);
+    const hottestReadyLanes = readyLaneSamples
+      .map((sample) => ({
+        owner: sample.owner,
+        queueClass: sample.queueClass,
+        laneId: sample.laneId,
+        priority: sample.priority,
+        depth: sample.depth,
+        capacity: sample.capacity,
+        utilizationRatio:
+          sample.capacity !== undefined ? sample.depth / sample.capacity : undefined,
+      }))
+      .sort((left, right) => {
+        const leftScore = left.utilizationRatio ?? left.depth;
+        const rightScore = right.utilizationRatio ?? right.depth;
+        return rightScore - leftScore;
+      })
+      .slice(0, 5);
+
+    const peakReadyLaneUtilizationRatio = readyLaneSamples.reduce<number | undefined>(
+      (peak, sample) => {
+        if (sample.capacity === undefined) {
+          return peak;
+        }
+
+        const nextRatio = sample.depth / sample.capacity;
+        return peak === undefined ? nextRatio : Math.max(peak, nextRatio);
+      },
+      undefined
+    );
+
+    const bySourceJobType = new Map<
+      string,
+      {
+        owner: string;
+        queueClass: NormalizedDependencyUnlockSample["queueClass"];
+        sourceJobType: string;
+        unlockCount: number;
+      }
+    >();
+    const byUnlockedJobType = new Map<
+      string,
+      {
+        owner: string;
+        queueClass: NormalizedDependencyUnlockSample["queueClass"];
+        unlockedJobType: string;
+        priority?: number;
+        unlockCount: number;
+      }
+    >();
+
+    let totalUnlockCount = 0;
+
+    for (const sample of dependencyUnlockSamples) {
+      totalUnlockCount += sample.unlockCount;
+
+      const sourceKey = `${sample.owner}:${sample.queueClass}:${sample.sourceJobType}`;
+      const unlockedKey =
+        `${sample.owner}:${sample.queueClass}:` +
+        `${sample.unlockedJobType}:${sample.priority ?? "none"}`;
+
+      const sourceBucket = bySourceJobType.get(sourceKey) ?? {
+        owner: sample.owner,
+        queueClass: sample.queueClass,
+        sourceJobType: sample.sourceJobType,
+        unlockCount: 0,
+      };
+      sourceBucket.unlockCount += sample.unlockCount;
+      bySourceJobType.set(sourceKey, sourceBucket);
+
+      const unlockedBucket = byUnlockedJobType.get(unlockedKey) ?? {
+        owner: sample.owner,
+        queueClass: sample.queueClass,
+        unlockedJobType: sample.unlockedJobType,
+        priority: sample.priority,
+        unlockCount: 0,
+      };
+      unlockedBucket.unlockCount += sample.unlockCount;
+      byUnlockedJobType.set(unlockedKey, unlockedBucket);
+    }
+
+    return {
+      readyLaneSampleCount: readyLaneSamples.length,
+      averageReadyLaneDepth: average(laneDepths) ?? 0,
+      peakReadyLaneDepth: laneDepths.length === 0 ? 0 : Math.max(...laneDepths),
+      peakReadyLaneUtilizationRatio,
+      hottestReadyLanes,
+      dependencyUnlockSampleCount: dependencyUnlockSamples.length,
+      totalUnlockCount,
+      bySourceJobType: [...bySourceJobType.values()].sort(
+        (left, right) => right.unlockCount - left.unlockCount
+      ),
+      byUnlockedJobType: [...byUnlockedJobType.values()].sort(
+        (left, right) => right.unlockCount - left.unlockCount
+      ),
+    };
+  };
+
   return {
     isEnabled() {
       return enabled;
@@ -398,6 +602,15 @@ export function createGpuDebugSession(
       trimHistory(queueSamples, settings.maxRetainedQueueSamples);
       return true;
     },
+    recordReadyLane(sample) {
+      if (!enabled || sample.signal?.aborted === true) {
+        return false;
+      }
+
+      readyLaneSamples.push(normalizeReadyLaneSample(sample));
+      trimHistory(readyLaneSamples, settings.maxRetainedReadyLaneSamples);
+      return true;
+    },
     recordDispatch(sample) {
       if (!enabled || sample.signal?.aborted === true) {
         return false;
@@ -405,6 +618,18 @@ export function createGpuDebugSession(
 
       dispatchSamples.push(normalizeDispatchSample(sample));
       trimHistory(dispatchSamples, settings.maxRetainedDispatches);
+      return true;
+    },
+    recordDependencyUnlock(sample) {
+      if (!enabled || sample.signal?.aborted === true) {
+        return false;
+      }
+
+      dependencyUnlockSamples.push(normalizeDependencyUnlockSample(sample));
+      trimHistory(
+        dependencyUnlockSamples,
+        settings.maxRetainedDependencyUnlockSamples
+      );
       return true;
     },
     recordFrame(sample) {
@@ -465,6 +690,7 @@ export function createGpuDebugSession(
               : undefined,
           averageGpuBusyMs: average(gpuBusyTimes),
         },
+        dag: buildDagSnapshot(),
         limitations: LIMITATIONS,
       };
 
@@ -474,7 +700,9 @@ export function createGpuDebugSession(
       allocations.clear();
       allocationOrder.splice(0, allocationOrder.length);
       queueSamples.splice(0, queueSamples.length);
+      readyLaneSamples.splice(0, readyLaneSamples.length);
       dispatchSamples.splice(0, dispatchSamples.length);
+      dependencyUnlockSamples.splice(0, dependencyUnlockSamples.length);
       frameSamples.splice(0, frameSamples.length);
       peakTrackedBytes = 0;
     },

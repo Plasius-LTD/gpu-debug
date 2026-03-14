@@ -39,6 +39,8 @@ export interface GpuDebugSessionOptions {
   adapter?: GpuDebugAdapterInfo;
   maxRetainedDispatches?: number;
   maxRetainedQueueSamples?: number;
+  maxRetainedReadyLaneSamples?: number;
+  maxRetainedDependencyUnlockSamples?: number;
   maxRetainedFrameSamples?: number;
   maxTrackedAllocations?: number;
 }
@@ -55,6 +57,17 @@ export interface TrackedGpuAllocation {
 export interface GpuQueueSample {
   owner: string;
   queueClass: GpuDebugQueueClass;
+  depth: number;
+  capacity?: number;
+  frameId?: string;
+  signal?: AbortSignal;
+}
+
+export interface GpuReadyLaneSample {
+  owner: string;
+  queueClass: GpuDebugQueueClass;
+  laneId: string;
+  priority?: number;
   depth: number;
   capacity?: number;
   frameId?: string;
@@ -81,6 +94,17 @@ export interface GpuFrameSample {
   targetFrameTimeMs?: number;
   gpuBusyMs?: number;
   dropped?: boolean;
+  signal?: AbortSignal;
+}
+
+export interface GpuDependencyUnlockSample {
+  owner: string;
+  queueClass: GpuDebugQueueClass;
+  sourceJobType: string;
+  unlockedJobType: string;
+  priority?: number;
+  unlockCount?: number;
+  frameId?: string;
   signal?: AbortSignal;
 }
 
@@ -133,6 +157,37 @@ export interface GpuDebugFrameSnapshot {
   averageGpuBusyMs?: number;
 }
 
+export interface GpuDebugDagSnapshot {
+  readyLaneSampleCount: number;
+  averageReadyLaneDepth: number;
+  peakReadyLaneDepth: number;
+  peakReadyLaneUtilizationRatio?: number;
+  hottestReadyLanes: readonly {
+    owner: string;
+    queueClass: GpuDebugQueueClass;
+    laneId: string;
+    priority?: number;
+    depth: number;
+    capacity?: number;
+    utilizationRatio?: number;
+  }[];
+  dependencyUnlockSampleCount: number;
+  totalUnlockCount: number;
+  bySourceJobType: readonly {
+    owner: string;
+    queueClass: GpuDebugQueueClass;
+    sourceJobType: string;
+    unlockCount: number;
+  }[];
+  byUnlockedJobType: readonly {
+    owner: string;
+    queueClass: GpuDebugQueueClass;
+    unlockedJobType: string;
+    priority?: number;
+    unlockCount: number;
+  }[];
+}
+
 export interface GpuDebugSnapshot {
   enabled: boolean;
   adapter: Readonly<GpuDebugAdapterInfo>;
@@ -140,6 +195,7 @@ export interface GpuDebugSnapshot {
   dispatch: GpuDebugDispatchSnapshot;
   queues: GpuDebugQueueSnapshot;
   frames: GpuDebugFrameSnapshot;
+  dag: GpuDebugDagSnapshot;
   limitations: readonly string[];
 }
 
@@ -149,7 +205,9 @@ export interface GpuDebugSession {
   trackAllocation(allocation: TrackedGpuAllocation): () => void;
   releaseAllocation(id: string): boolean;
   recordQueue(sample: GpuQueueSample): boolean;
+  recordReadyLane(sample: GpuReadyLaneSample): boolean;
   recordDispatch(sample: GpuDispatchSample): boolean;
+  recordDependencyUnlock(sample: GpuDependencyUnlockSample): boolean;
   recordFrame(sample: GpuFrameSample): boolean;
   getSnapshot(): GpuDebugSnapshot;
   reset(): void;

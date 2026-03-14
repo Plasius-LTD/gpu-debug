@@ -73,6 +73,15 @@ describe("gpu debug session", () => {
       capacity: 24,
       frameId: "frame-2",
     });
+    session.recordReadyLane({
+      owner: "lighting",
+      queueClass: "lighting",
+      laneId: "priority-4",
+      priority: 4,
+      depth: 5,
+      capacity: 8,
+      frameId: "frame-2",
+    });
     session.recordDispatch({
       owner: "post",
       queueClass: "post-processing",
@@ -83,6 +92,15 @@ describe("gpu debug session", () => {
       workgroupSize: { x: 8, y: 8, z: 1 },
       bytesRead: 4096,
       bytesWritten: 2048,
+    });
+    session.recordDependencyUnlock({
+      owner: "lighting",
+      queueClass: "lighting",
+      sourceJobType: "lighting.direct",
+      unlockedJobType: "lighting.resolve",
+      priority: 2,
+      unlockCount: 2,
+      frameId: "frame-2",
     });
     session.recordFrame({
       frameId: "frame-2",
@@ -97,6 +115,18 @@ describe("gpu debug session", () => {
     expect(snapshot.dispatch.busyRatio).toBeCloseTo(2.5 / 16.9, 6);
     expect(snapshot.queues.peakUtilizationRatio).toBe(0.5);
     expect(snapshot.frames.averageGpuBusyMs).toBe(8.1);
+    expect(snapshot.dag.readyLaneSampleCount).toBe(1);
+    expect(snapshot.dag.peakReadyLaneUtilizationRatio).toBe(0.625);
+    expect(snapshot.dag.totalUnlockCount).toBe(2);
+    expect(snapshot.dag.byUnlockedJobType).toEqual([
+      {
+        owner: "lighting",
+        queueClass: "lighting",
+        unlockedJobType: "lighting.resolve",
+        priority: 2,
+        unlockCount: 2,
+      },
+    ]);
     expect(snapshot.limitations[1]).toContain("core-count");
   });
 
@@ -108,6 +138,8 @@ describe("gpu debug session", () => {
       enabled: true,
       maxRetainedDispatches: 2,
       maxRetainedQueueSamples: 2,
+      maxRetainedReadyLaneSamples: 2,
+      maxRetainedDependencyUnlockSamples: 2,
       maxRetainedFrameSamples: 2,
       maxTrackedAllocations: 1,
     });
@@ -166,6 +198,47 @@ describe("gpu debug session", () => {
       depth: 3,
     });
 
+    session.recordReadyLane({
+      owner: "lighting",
+      queueClass: "lighting",
+      laneId: "priority-3",
+      priority: 3,
+      depth: 1,
+    });
+    session.recordReadyLane({
+      owner: "lighting",
+      queueClass: "lighting",
+      laneId: "priority-2",
+      priority: 2,
+      depth: 2,
+    });
+    session.recordReadyLane({
+      owner: "lighting",
+      queueClass: "lighting",
+      laneId: "priority-1",
+      priority: 1,
+      depth: 3,
+    });
+
+    session.recordDependencyUnlock({
+      owner: "lighting",
+      queueClass: "lighting",
+      sourceJobType: "lighting.direct",
+      unlockedJobType: "lighting.cache",
+    });
+    session.recordDependencyUnlock({
+      owner: "lighting",
+      queueClass: "lighting",
+      sourceJobType: "lighting.cache",
+      unlockedJobType: "lighting.resolve",
+    });
+    session.recordDependencyUnlock({
+      owner: "lighting",
+      queueClass: "lighting",
+      sourceJobType: "lighting.resolve",
+      unlockedJobType: "lighting.present",
+    });
+
     session.recordFrame({
       frameId: "f1",
       frameTimeMs: 16,
@@ -192,7 +265,34 @@ describe("gpu debug session", () => {
     expect(snapshot.dispatch.sampleCount).toBe(2);
     expect(snapshot.queues.sampleCount).toBe(2);
     expect(snapshot.frames.sampleCount).toBe(2);
+    expect(snapshot.dag.readyLaneSampleCount).toBe(2);
+    expect(snapshot.dag.dependencyUnlockSampleCount).toBe(2);
     expect(snapshot.frames.latestFrameTimeMs).toBe(18);
+  });
+
+  it("resets DAG diagnostics alongside the rest of the session", () => {
+    const session = createGpuDebugSession({ enabled: true });
+
+    session.recordReadyLane({
+      owner: "particles",
+      queueClass: "simulation",
+      laneId: "priority-2",
+      priority: 2,
+      depth: 4,
+    });
+    session.recordDependencyUnlock({
+      owner: "particles",
+      queueClass: "simulation",
+      sourceJobType: "particles.simulate",
+      unlockedJobType: "particles.render",
+    });
+
+    session.reset();
+
+    const snapshot = session.getSnapshot();
+    expect(snapshot.dag.readyLaneSampleCount).toBe(0);
+    expect(snapshot.dag.dependencyUnlockSampleCount).toBe(0);
+    expect(snapshot.dag.totalUnlockCount).toBe(0);
   });
 
   it("estimates invocation counts from dispatch metadata", () => {
