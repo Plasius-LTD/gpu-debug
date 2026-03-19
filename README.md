@@ -21,6 +21,17 @@ Apache-2.0. ESM + CJS builds. TypeScript types included.
 npm install @plasius/gpu-debug
 ```
 
+## Browser Demo
+
+```bash
+npm run demo
+```
+
+Then open `http://localhost:8000/gpu-debug/demo/`.
+
+`npm run demo` now visualizes debug telemetry against the shared 3D harbor
+scene, while `npm run demo:example` keeps the console example path.
+
 ## What It Solves
 
 - Exposes tracked GPU allocation totals by owner and category.
