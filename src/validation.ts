@@ -1,5 +1,6 @@
 import type {
   GpuDebugAdapterInfo,
+  GpuPipelinePhase,
   GpuDebugQueueClass,
   GpuResourceCategory,
   GpuVector3,
@@ -24,6 +25,13 @@ export const gpuResourceCategories = Object.freeze([
   "pipeline",
   "custom",
 ]) satisfies readonly GpuResourceCategory[];
+
+export const gpuPipelinePhases = Object.freeze([
+  "simulation",
+  "secondary-simulation",
+  "scene-preparation",
+  "render",
+]) satisfies readonly GpuPipelinePhase[];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

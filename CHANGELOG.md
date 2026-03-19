@@ -9,11 +9,15 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Pipeline phase telemetry for simulation-to-visual handoff timing and
+    snapshot-lag diagnostics.
+  - ADR, TDR, design docs, and tests for pipeline phase instrumentation.
 
 - **Changed**
   - CI and CD workflows now upload coverage through the Codecov CLI instead of
     the JavaScript action wrapper, removing the remaining Node 20 action path.
+  - Debug snapshots now include a `pipeline` summary section when callers record
+    phase samples.
 
 - **Fixed**
   - (placeholder)

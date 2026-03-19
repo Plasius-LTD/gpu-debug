@@ -14,6 +14,12 @@ export type GpuResourceCategory =
   | "pipeline"
   | "custom";
 
+export type GpuPipelinePhase =
+  | "simulation"
+  | "secondary-simulation"
+  | "scene-preparation"
+  | "render";
+
 export interface GpuVector3 {
   x: number;
   y?: number;
@@ -41,6 +47,7 @@ export interface GpuDebugSessionOptions {
   maxRetainedQueueSamples?: number;
   maxRetainedReadyLaneSamples?: number;
   maxRetainedDependencyUnlockSamples?: number;
+  maxRetainedPipelinePhaseSamples?: number;
   maxRetainedFrameSamples?: number;
   maxTrackedAllocations?: number;
 }
@@ -105,6 +112,18 @@ export interface GpuDependencyUnlockSample {
   priority?: number;
   unlockCount?: number;
   frameId?: string;
+  signal?: AbortSignal;
+}
+
+export interface GpuPipelinePhaseSample {
+  owner: string;
+  pipeline: GpuPipelinePhase;
+  stage: string;
+  frameId?: string;
+  durationMs?: number;
+  snapshotFrameId?: string;
+  snapshotAgeFrames?: number;
+  snapshotAgeMs?: number;
   signal?: AbortSignal;
 }
 
@@ -188,6 +207,34 @@ export interface GpuDebugDagSnapshot {
   }[];
 }
 
+export interface GpuDebugPipelineSnapshot {
+  sampleCount: number;
+  totalDurationMs: number;
+  averageDurationMs?: number;
+  averageSnapshotAgeMs?: number;
+  maxSnapshotAgeMs?: number;
+  maxSnapshotAgeFrames?: number;
+  byPipeline: readonly {
+    pipeline: GpuPipelinePhase;
+    sampleCount: number;
+    totalDurationMs: number;
+    averageDurationMs?: number;
+    averageSnapshotAgeMs?: number;
+    maxSnapshotAgeMs?: number;
+    maxSnapshotAgeFrames?: number;
+  }[];
+  hottestStages: readonly {
+    owner: string;
+    pipeline: GpuPipelinePhase;
+    stage: string;
+    frameId?: string;
+    durationMs?: number;
+    snapshotFrameId?: string;
+    snapshotAgeFrames?: number;
+    snapshotAgeMs?: number;
+  }[];
+}
+
 export interface GpuDebugSnapshot {
   enabled: boolean;
   adapter: Readonly<GpuDebugAdapterInfo>;
@@ -196,6 +243,7 @@ export interface GpuDebugSnapshot {
   queues: GpuDebugQueueSnapshot;
   frames: GpuDebugFrameSnapshot;
   dag: GpuDebugDagSnapshot;
+  pipeline: GpuDebugPipelineSnapshot;
   limitations: readonly string[];
 }
 
@@ -208,6 +256,7 @@ export interface GpuDebugSession {
   recordReadyLane(sample: GpuReadyLaneSample): boolean;
   recordDispatch(sample: GpuDispatchSample): boolean;
   recordDependencyUnlock(sample: GpuDependencyUnlockSample): boolean;
+  recordPipelinePhase(sample: GpuPipelinePhaseSample): boolean;
   recordFrame(sample: GpuFrameSample): boolean;
   getSnapshot(): GpuDebugSnapshot;
   reset(): void;

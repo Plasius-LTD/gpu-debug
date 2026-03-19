@@ -104,6 +104,16 @@ debug.recordFrame({
   gpuBusyMs: 8.2,
 });
 
+debug.recordPipelinePhase({
+  owner: "physics",
+  pipeline: "simulation",
+  stage: "worldSnapshot",
+  frameId: "frame-101",
+  durationMs: 0.7,
+  snapshotAgeFrames: 0,
+  snapshotAgeMs: 0,
+});
+
 console.log(debug.getSnapshot());
 releaseParticles();
 ```
@@ -122,6 +132,7 @@ Portable WebGPU does not currently guarantee authoritative access to:
 - estimated invocation and workgroup totals from dispatch metadata,
 - queue-depth and frame-budget summaries,
 - DAG-ready lane and dependency-unlock summaries when integrations report them,
+- pipeline phase and snapshot-lag summaries when integrations report them,
 - optional hardware hints provided by the host runtime.
 
 If a native shell, browser extension, or proprietary platform layer can provide
@@ -211,6 +222,14 @@ debug.recordDependencyUnlock({
   unlockedJobType: "lighting.resolve",
   priority: 2,
   frameId: `frame-${frameNumber}`,
+});
+
+debug.recordPipelinePhase({
+  owner: "physics",
+  pipeline: "simulation",
+  stage: "worldSnapshot",
+  frameId: `frame-${frameNumber}`,
+  durationMs: 0.8,
 });
 ```
 

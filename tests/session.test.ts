@@ -102,6 +102,25 @@ describe("gpu debug session", () => {
       unlockCount: 2,
       frameId: "frame-2",
     });
+    session.recordPipelinePhase({
+      owner: "physics",
+      pipeline: "simulation",
+      stage: "worldSnapshot",
+      frameId: "frame-2",
+      durationMs: 0.7,
+      snapshotAgeFrames: 0,
+      snapshotAgeMs: 0,
+    });
+    session.recordPipelinePhase({
+      owner: "particles",
+      pipeline: "secondary-simulation",
+      stage: "particles.fire.update",
+      frameId: "frame-2",
+      snapshotFrameId: "frame-2",
+      durationMs: 0.5,
+      snapshotAgeFrames: 0,
+      snapshotAgeMs: 0.2,
+    });
     session.recordFrame({
       frameId: "frame-2",
       frameTimeMs: 16.9,
@@ -127,6 +146,30 @@ describe("gpu debug session", () => {
         unlockCount: 2,
       },
     ]);
+    expect(snapshot.pipeline.sampleCount).toBe(2);
+    expect(snapshot.pipeline.totalDurationMs).toBeCloseTo(1.2, 6);
+    expect(snapshot.pipeline.averageSnapshotAgeMs).toBeCloseTo(0.1, 6);
+    expect(snapshot.pipeline.maxSnapshotAgeFrames).toBe(0);
+    expect(snapshot.pipeline.byPipeline).toEqual([
+      {
+        pipeline: "simulation",
+        sampleCount: 1,
+        totalDurationMs: 0.7,
+        averageDurationMs: 0.7,
+        averageSnapshotAgeMs: 0,
+        maxSnapshotAgeMs: 0,
+        maxSnapshotAgeFrames: 0,
+      },
+      {
+        pipeline: "secondary-simulation",
+        sampleCount: 1,
+        totalDurationMs: 0.5,
+        averageDurationMs: 0.5,
+        averageSnapshotAgeMs: 0.2,
+        maxSnapshotAgeMs: 0.2,
+        maxSnapshotAgeFrames: 0,
+      },
+    ]);
     expect(snapshot.limitations[1]).toContain("core-count");
   });
 
@@ -140,6 +183,7 @@ describe("gpu debug session", () => {
       maxRetainedQueueSamples: 2,
       maxRetainedReadyLaneSamples: 2,
       maxRetainedDependencyUnlockSamples: 2,
+      maxRetainedPipelinePhaseSamples: 2,
       maxRetainedFrameSamples: 2,
       maxTrackedAllocations: 1,
     });
@@ -251,6 +295,24 @@ describe("gpu debug session", () => {
       frameId: "f3",
       frameTimeMs: 18,
     });
+    session.recordPipelinePhase({
+      owner: "physics",
+      pipeline: "simulation",
+      stage: "authoritativeCommit",
+      durationMs: 0.3,
+    });
+    session.recordPipelinePhase({
+      owner: "physics",
+      pipeline: "simulation",
+      stage: "worldSnapshot",
+      durationMs: 0.4,
+    });
+    session.recordPipelinePhase({
+      owner: "particles",
+      pipeline: "secondary-simulation",
+      stage: "particles.fire.update",
+      durationMs: 0.5,
+    });
 
     expect(
       session.recordFrame({
@@ -267,6 +329,7 @@ describe("gpu debug session", () => {
     expect(snapshot.frames.sampleCount).toBe(2);
     expect(snapshot.dag.readyLaneSampleCount).toBe(2);
     expect(snapshot.dag.dependencyUnlockSampleCount).toBe(2);
+    expect(snapshot.pipeline.sampleCount).toBe(2);
     expect(snapshot.frames.latestFrameTimeMs).toBe(18);
   });
 
@@ -286,6 +349,12 @@ describe("gpu debug session", () => {
       sourceJobType: "particles.simulate",
       unlockedJobType: "particles.render",
     });
+    session.recordPipelinePhase({
+      owner: "physics",
+      pipeline: "simulation",
+      stage: "worldSnapshot",
+      durationMs: 0.4,
+    });
 
     session.reset();
 
@@ -293,6 +362,28 @@ describe("gpu debug session", () => {
     expect(snapshot.dag.readyLaneSampleCount).toBe(0);
     expect(snapshot.dag.dependencyUnlockSampleCount).toBe(0);
     expect(snapshot.dag.totalUnlockCount).toBe(0);
+    expect(snapshot.pipeline.sampleCount).toBe(0);
+  });
+
+  it("validates pipeline phase samples", () => {
+    const session = createGpuDebugSession({ enabled: true });
+
+    expect(() =>
+      session.recordPipelinePhase({
+        owner: "physics",
+        pipeline: "unknown" as never,
+        stage: "worldSnapshot",
+      })
+    ).toThrow(/pipelinePhase.pipeline must be one of/);
+
+    expect(() =>
+      session.recordPipelinePhase({
+        owner: "physics",
+        pipeline: "simulation",
+        stage: "worldSnapshot",
+        snapshotAgeFrames: 0.5,
+      })
+    ).toThrow(/pipelinePhase.snapshotAgeFrames must be an integer/);
   });
 
   it("estimates invocation counts from dispatch metadata", () => {

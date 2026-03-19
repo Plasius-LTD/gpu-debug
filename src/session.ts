@@ -1,6 +1,7 @@
 import type {
   GpuDebugDagSnapshot,
   GpuDebugDispatchSnapshot,
+  GpuDebugPipelineSnapshot,
   GpuDebugQueueSnapshot,
   GpuDebugSession,
   GpuDebugSessionOptions,
@@ -8,6 +9,7 @@ import type {
   GpuDependencyUnlockSample,
   GpuDispatchSample,
   GpuFrameSample,
+  GpuPipelinePhaseSample,
   GpuQueueSample,
   GpuReadyLaneSample,
   GpuResourceCategory,
@@ -17,6 +19,7 @@ import {
   assertEnumValue,
   assertIdentifier,
   gpuDebugQueueClasses,
+  gpuPipelinePhases,
   gpuResourceCategories,
   isAbortSignalLike,
   normalizeAdapterInfo,
@@ -32,6 +35,7 @@ const DEFAULT_OPTIONS = Object.freeze({
   maxRetainedQueueSamples: 240,
   maxRetainedReadyLaneSamples: 240,
   maxRetainedDependencyUnlockSamples: 240,
+  maxRetainedPipelinePhaseSamples: 240,
   maxRetainedFrameSamples: 240,
   maxTrackedAllocations: 512,
 });
@@ -41,6 +45,7 @@ const LIMITATIONS = Object.freeze([
   "Portable WebGPU does not expose authoritative live GPU core-count or total-memory counters.",
   "Hardware hints are optional caller-supplied metadata and may be platform-specific.",
   "Ready-lane and dependency-unlock diagnostics are caller-reported integration samples, not automatic WebGPU counters.",
+  "Pipeline phase and snapshot-lag diagnostics are caller-reported integration samples, not automatic WebGPU counters.",
 ]);
 
 interface NormalizedAllocation extends Omit<TrackedGpuAllocation, "signal"> {
@@ -64,6 +69,13 @@ interface NormalizedDependencyUnlockSample
   extends Omit<GpuDependencyUnlockSample, "signal"> {
   priority?: number;
   unlockCount: number;
+}
+
+interface NormalizedPipelinePhaseSample
+  extends Omit<GpuPipelinePhaseSample, "signal"> {
+  durationMs?: number;
+  snapshotAgeFrames?: number;
+  snapshotAgeMs?: number;
 }
 
 function clampCount(value: number | undefined, fallback: number): number {
@@ -280,6 +292,51 @@ function normalizeDependencyUnlockSample(
   };
 }
 
+function normalizePipelinePhaseSample(
+  sample: GpuPipelinePhaseSample
+): NormalizedPipelinePhaseSample {
+  if (sample.signal !== undefined && !isAbortSignalLike(sample.signal)) {
+    throw new Error("pipelinePhase.signal must be an AbortSignal when provided.");
+  }
+
+  const snapshotAgeFrames = readNonNegativeNumber(
+    "pipelinePhase.snapshotAgeFrames",
+    sample.snapshotAgeFrames
+  );
+  if (snapshotAgeFrames !== undefined && !Number.isInteger(snapshotAgeFrames)) {
+    throw new Error(
+      "pipelinePhase.snapshotAgeFrames must be an integer greater than or equal to zero."
+    );
+  }
+
+  return {
+    owner: assertIdentifier("pipelinePhase.owner", sample.owner),
+    pipeline: assertEnumValue(
+      "pipelinePhase.pipeline",
+      sample.pipeline,
+      gpuPipelinePhases
+    ),
+    stage: assertIdentifier("pipelinePhase.stage", sample.stage),
+    frameId:
+      sample.frameId === undefined
+        ? undefined
+        : assertIdentifier("pipelinePhase.frameId", sample.frameId),
+    durationMs: readNonNegativeNumber(
+      "pipelinePhase.durationMs",
+      sample.durationMs
+    ),
+    snapshotFrameId:
+      sample.snapshotFrameId === undefined
+        ? undefined
+        : assertIdentifier("pipelinePhase.snapshotFrameId", sample.snapshotFrameId),
+    snapshotAgeFrames,
+    snapshotAgeMs: readNonNegativeNumber(
+      "pipelinePhase.snapshotAgeMs",
+      sample.snapshotAgeMs
+    ),
+  };
+}
+
 export function estimateDispatchInvocations(sample: GpuDispatchSample): number {
   const normalized = normalizeDispatchSample(sample);
   return (
@@ -313,6 +370,10 @@ export function createGpuDebugSession(
       options.maxRetainedDependencyUnlockSamples,
       DEFAULT_OPTIONS.maxRetainedDependencyUnlockSamples
     ),
+    maxRetainedPipelinePhaseSamples: clampCount(
+      options.maxRetainedPipelinePhaseSamples,
+      DEFAULT_OPTIONS.maxRetainedPipelinePhaseSamples
+    ),
     maxRetainedFrameSamples: clampCount(
       options.maxRetainedFrameSamples,
       DEFAULT_OPTIONS.maxRetainedFrameSamples
@@ -331,6 +392,7 @@ export function createGpuDebugSession(
   const readyLaneSamples: NormalizedReadyLaneSample[] = [];
   const dispatchSamples: NormalizedDispatchSample[] = [];
   const dependencyUnlockSamples: NormalizedDependencyUnlockSample[] = [];
+  const pipelinePhaseSamples: NormalizedPipelinePhaseSample[] = [];
   const frameSamples: NormalizedFrameSample[] = [];
   let peakTrackedBytes = 0;
 
@@ -555,6 +617,110 @@ export function createGpuDebugSession(
     };
   };
 
+  const buildPipelineSnapshot = (): GpuDebugPipelineSnapshot => {
+    const durations = pipelinePhaseSamples
+      .map((sample) => sample.durationMs)
+      .filter((value): value is number => value !== undefined);
+    const snapshotAgeMsValues = pipelinePhaseSamples
+      .map((sample) => sample.snapshotAgeMs)
+      .filter((value): value is number => value !== undefined);
+    const snapshotAgeFrameValues = pipelinePhaseSamples
+      .map((sample) => sample.snapshotAgeFrames)
+      .filter((value): value is number => value !== undefined);
+
+    const byPipeline = new Map<
+      NormalizedPipelinePhaseSample["pipeline"],
+      {
+        pipeline: NormalizedPipelinePhaseSample["pipeline"];
+        sampleCount: number;
+        totalDurationMs: number;
+        durationValues: number[];
+        snapshotAgeMsValues: number[];
+        snapshotAgeFramesValues: number[];
+      }
+    >();
+
+    for (const sample of pipelinePhaseSamples) {
+      const bucket = byPipeline.get(sample.pipeline) ?? {
+        pipeline: sample.pipeline,
+        sampleCount: 0,
+        totalDurationMs: 0,
+        durationValues: [],
+        snapshotAgeMsValues: [],
+        snapshotAgeFramesValues: [],
+      };
+      bucket.sampleCount += 1;
+      bucket.totalDurationMs += sample.durationMs ?? 0;
+      if (sample.durationMs !== undefined) {
+        bucket.durationValues.push(sample.durationMs);
+      }
+      if (sample.snapshotAgeMs !== undefined) {
+        bucket.snapshotAgeMsValues.push(sample.snapshotAgeMs);
+      }
+      if (sample.snapshotAgeFrames !== undefined) {
+        bucket.snapshotAgeFramesValues.push(sample.snapshotAgeFrames);
+      }
+      byPipeline.set(sample.pipeline, bucket);
+    }
+
+    const hottestStages = pipelinePhaseSamples
+      .map((sample) => ({
+        owner: sample.owner,
+        pipeline: sample.pipeline,
+        stage: sample.stage,
+        frameId: sample.frameId,
+        durationMs: sample.durationMs,
+        snapshotFrameId: sample.snapshotFrameId,
+        snapshotAgeFrames: sample.snapshotAgeFrames,
+        snapshotAgeMs: sample.snapshotAgeMs,
+      }))
+      .sort((left, right) => {
+        const leftScore =
+          left.durationMs ??
+          left.snapshotAgeMs ??
+          left.snapshotAgeFrames ??
+          0;
+        const rightScore =
+          right.durationMs ??
+          right.snapshotAgeMs ??
+          right.snapshotAgeFrames ??
+          0;
+        return rightScore - leftScore;
+      })
+      .slice(0, 5);
+
+    return {
+      sampleCount: pipelinePhaseSamples.length,
+      totalDurationMs: durations.reduce((total, value) => total + value, 0),
+      averageDurationMs: average(durations),
+      averageSnapshotAgeMs: average(snapshotAgeMsValues),
+      maxSnapshotAgeMs:
+        snapshotAgeMsValues.length > 0 ? Math.max(...snapshotAgeMsValues) : undefined,
+      maxSnapshotAgeFrames:
+        snapshotAgeFrameValues.length > 0
+          ? Math.max(...snapshotAgeFrameValues)
+          : undefined,
+      byPipeline: [...byPipeline.values()]
+        .map((bucket) => ({
+          pipeline: bucket.pipeline,
+          sampleCount: bucket.sampleCount,
+          totalDurationMs: bucket.totalDurationMs,
+          averageDurationMs: average(bucket.durationValues),
+          averageSnapshotAgeMs: average(bucket.snapshotAgeMsValues),
+          maxSnapshotAgeMs:
+            bucket.snapshotAgeMsValues.length > 0
+              ? Math.max(...bucket.snapshotAgeMsValues)
+              : undefined,
+          maxSnapshotAgeFrames:
+            bucket.snapshotAgeFramesValues.length > 0
+              ? Math.max(...bucket.snapshotAgeFramesValues)
+              : undefined,
+        }))
+        .sort((left, right) => right.totalDurationMs - left.totalDurationMs),
+      hottestStages,
+    };
+  };
+
   return {
     isEnabled() {
       return enabled;
@@ -632,6 +798,18 @@ export function createGpuDebugSession(
       );
       return true;
     },
+    recordPipelinePhase(sample) {
+      if (!enabled || sample.signal?.aborted === true) {
+        return false;
+      }
+
+      pipelinePhaseSamples.push(normalizePipelinePhaseSample(sample));
+      trimHistory(
+        pipelinePhaseSamples,
+        settings.maxRetainedPipelinePhaseSamples
+      );
+      return true;
+    },
     recordFrame(sample) {
       if (!enabled || sample.signal?.aborted === true) {
         return false;
@@ -691,6 +869,7 @@ export function createGpuDebugSession(
           averageGpuBusyMs: average(gpuBusyTimes),
         },
         dag: buildDagSnapshot(),
+        pipeline: buildPipelineSnapshot(),
         limitations: LIMITATIONS,
       };
 
@@ -703,6 +882,7 @@ export function createGpuDebugSession(
       readyLaneSamples.splice(0, readyLaneSamples.length);
       dispatchSamples.splice(0, dispatchSamples.length);
       dependencyUnlockSamples.splice(0, dependencyUnlockSamples.length);
+      pipelinePhaseSamples.splice(0, pipelinePhaseSamples.length);
       frameSamples.splice(0, frameSamples.length);
       peakTrackedBytes = 0;
     },
