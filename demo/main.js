@@ -1,5 +1,5 @@
 import { createGpuDebugSession } from "../dist/index.js";
-import { mountHarborShowcase } from "./harbor-runtime.js";
+import { mountGpuShowcase as mountHarborShowcase } from "../node_modules/@plasius/gpu-shared/dist/index.js";
 
 const root = globalThis.document?.getElementById("app");
 if (!root) {
