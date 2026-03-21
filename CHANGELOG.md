@@ -23,6 +23,9 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
   - `gpu-debug/demo/` is now self-contained, with a local harbor runtime, GLTF
     ship asset, and loader instead of a sibling-repo showcase import.
   - `demo:example` remains available for the console example.
+  - The harbor runtime now renders stronger near-field shadow projection and
+    reflection accents, so queue and pipeline pressure are judged against a
+    more realistic lighting pass.
 
 - **Fixed**
   - (placeholder)
