@@ -116,7 +116,7 @@ function describeState(state) {
       `snapshot lag: ${(snapshot.pipeline.averageSnapshotAgeMs ?? 0).toFixed(2)} ms`,
     ],
     notes: [
-      "The debug demo now rides on the shared gpu-demo-viewer harbor runtime so telemetry is attached to the same family-owned scene pipeline.",
+      "The debug demo now rides on the shared @plasius/gpu-shared harbor runtime so telemetry is attached to the same family-owned scene pipeline.",
       "Stress mode drives queue depth and dispatch timing higher so the telemetry overlays react immediately.",
       "The scene remains a real 3D harbor while the package exposes its instrumentation state.",
     ],

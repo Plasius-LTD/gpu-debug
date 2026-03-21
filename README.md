@@ -30,7 +30,8 @@ npm run demo
 Then open `http://localhost:8000/gpu-debug/demo/`.
 
 `npm run demo` now visualizes debug telemetry against the shared 3D harbor
-scene, while `npm run demo:example` keeps the console example path.
+scene from `@plasius/gpu-shared`, while `npm run demo:example` keeps the
+console example path.
 
 ## What It Solves
 
