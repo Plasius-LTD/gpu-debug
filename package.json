@@ -60,6 +60,9 @@
     "url": "https://github.com/Plasius-LTD/gpu-debug/issues"
   },
   "homepage": "https://github.com/Plasius-LTD/gpu-debug#readme",
+  "dependencies": {
+    "@plasius/gpu-shared": "https://registry.npmjs.org/@plasius/gpu-shared/-/gpu-shared-0.1.0.tgz"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.3.1",
