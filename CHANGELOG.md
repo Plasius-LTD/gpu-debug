@@ -20,8 +20,9 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
     the JavaScript action wrapper, removing the remaining Node 20 action path.
   - Debug snapshots now include a `pipeline` summary section when callers record
     phase samples.
-  - `demo/main.js` now mounts the shared 3D showcase runtime while
-    `demo:example` remains available for the console example.
+  - `gpu-debug/demo/` is now self-contained, with a local harbor runtime, GLTF
+    ship asset, and loader instead of a sibling-repo showcase import.
+  - `demo:example` remains available for the console example.
 
 - **Fixed**
   - (placeholder)
