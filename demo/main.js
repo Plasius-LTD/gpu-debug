@@ -116,7 +116,7 @@ function describeState(state) {
       `snapshot lag: ${(snapshot.pipeline.averageSnapshotAgeMs ?? 0).toFixed(2)} ms`,
     ],
     notes: [
-      "The debug demo is now self-contained inside gpu-debug/demo and does not depend on a sibling repo path.",
+      "The debug demo now rides on the shared gpu-demo-viewer harbor runtime so telemetry is attached to the same family-owned scene pipeline.",
       "Stress mode drives queue depth and dispatch timing higher so the telemetry overlays react immediately.",
       "The scene remains a real 3D harbor while the package exposes its instrumentation state.",
     ],
@@ -147,7 +147,7 @@ await mountHarborShowcase({
   packageName: "@plasius/gpu-debug",
   title: "Debug Telemetry in a 3D Harbor",
   subtitle:
-    "Package-local 3D validation for queue, dispatch, and pipeline instrumentation, overlaid on the same harbor scene the metrics describe.",
+    "Family-coordinated 3D validation for queue, dispatch, and pipeline instrumentation, overlaid on the same harbor scene the metrics describe.",
   createState,
   updateState,
   describeState,
