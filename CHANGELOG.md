@@ -12,13 +12,16 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
   - Exported queue-class, pipeline-phase, and resource-category constants from
     the package root so integrations can consume the debug enum contract
     directly.
+  - Contract tests that lock the browser demo to the public
+    `@plasius/gpu-shared` package surface.
 
 - **Changed**
   - Updated the README to document the docs-first enum contract alongside the
-    debug session APIs.
+    debug session APIs and the shared harbor runtime package surface.
 
 - **Fixed**
-  - (placeholder)
+  - Removed the debug demo's deep import of `@plasius/gpu-shared` internals in
+    favor of an import-map-backed package import.
 
 - **Security**
   - (placeholder)
