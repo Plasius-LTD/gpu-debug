@@ -49,7 +49,12 @@ console example path.
 ## Usage
 
 ```ts
-import { createGpuDebugSession } from "@plasius/gpu-debug";
+import {
+  createGpuDebugSession,
+  gpuDebugQueueClasses,
+  gpuPipelinePhases,
+  gpuResourceCategories,
+} from "@plasius/gpu-debug";
 
 const debug = createGpuDebugSession({
   enabled: true,
@@ -60,6 +65,10 @@ const debug = createGpuDebugSession({
     coreCountHint: 40,
   },
 });
+
+console.log(gpuDebugQueueClasses);
+console.log(gpuPipelinePhases);
+console.log(gpuResourceCategories);
 
 const releaseParticles = debug.trackAllocation({
   id: "particles.buffer",
@@ -155,6 +164,13 @@ an inferred optimization aid rather than a full hardware profiler.
 
 - `createGpuDebugSession(options?)`
 - `estimateDispatchInvocations(sample)`
+- `gpuDebugQueueClasses`
+- `gpuPipelinePhases`
+- `gpuResourceCategories`
+
+The exported constants are the docs-first enum contract for integrations that
+need to validate or surface queue classes, pipeline phases, or tracked resource
+categories without importing internal validation helpers.
 
 ## Worker and Frame Correlation
 

@@ -9,10 +9,13 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Exported queue-class, pipeline-phase, and resource-category constants from
+    the package root so integrations can consume the debug enum contract
+    directly.
 
 - **Changed**
-  - (placeholder)
+  - Updated the README to document the docs-first enum contract alongside the
+    debug session APIs.
 
 - **Fixed**
   - (placeholder)

@@ -3,9 +3,37 @@ import { describe, expect, it } from "vitest";
 import {
   createGpuDebugSession,
   estimateDispatchInvocations,
+  gpuDebugQueueClasses,
+  gpuPipelinePhases,
+  gpuResourceCategories,
 } from "../src/index.js";
 
 describe("gpu debug session", () => {
+  it("exports queue, pipeline, and resource category contracts from the package root", () => {
+    expect(gpuDebugQueueClasses).toEqual([
+      "render",
+      "simulation",
+      "lighting",
+      "post-processing",
+      "voxel",
+      "transfer",
+      "custom",
+    ]);
+    expect(gpuPipelinePhases).toEqual([
+      "simulation",
+      "secondary-simulation",
+      "scene-preparation",
+      "render",
+    ]);
+    expect(gpuResourceCategories).toEqual([
+      "buffer",
+      "texture",
+      "bind-group",
+      "pipeline",
+      "custom",
+    ]);
+  });
+
   it("defaults to disabled and ignores samples until enabled", () => {
     const session = createGpuDebugSession();
 
