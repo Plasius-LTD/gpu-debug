@@ -118,7 +118,7 @@ function describeState(state) {
     notes: [
       "The debug demo now rides on the shared @plasius/gpu-shared harbor runtime so telemetry is attached to the same family-owned scene pipeline.",
       "Stress mode drives queue depth and dispatch timing higher so the telemetry overlays react immediately.",
-      "The scene remains a real 3D harbor while the package exposes its instrumentation state.",
+      "The scene remains a real moonlit harbor while the package exposes its instrumentation state.",
     ],
     textState: {
       frameSamples: snapshot.frames.sampleCount,
@@ -131,12 +131,12 @@ function describeState(state) {
       flagMotion: snapshot.dag.peakReadyLaneDepth > 6 ? 0.66 : 0.52,
       reflectionStrength: snapshot.frames.averageGpuBusyMs && snapshot.frames.averageGpuBusyMs > 10 ? 0.18 : 0.12,
       shadowAccent: snapshot.dispatch.averageDurationMs && snapshot.dispatch.averageDurationMs > 1.6 ? 0.08 : 0.04,
-      seaTop: "#214f65",
-      seaMid: "#103c52",
-      seaBottom: "#082231",
-      skyTop: "#edf5fa",
-      skyMid: "#bed2de",
-      skyBottom: "#7ca0b5",
+      waterNear: snapshot.frames.droppedCount > 0 ? { r: 0.12, g: 0.2, b: 0.29 } : { r: 0.08, g: 0.23, b: 0.33 },
+      waterFar: { r: 0.16, g: 0.32, b: 0.45 },
+      ambientMist: snapshot.dispatch.averageDurationMs && snapshot.dispatch.averageDurationMs > 1.6
+        ? "rgba(56, 74, 118, 0.22)"
+        : "rgba(41, 63, 97, 0.16)",
+      lanternReflectionStrength: snapshot.queues.peakDepth > 8 ? 0.5 : 0.4,
       flagColor: snapshot.frames.droppedCount > 0 ? { r: 0.8, g: 0.32, b: 0.18 } : { r: 0.72, g: 0.24, b: 0.18 },
     },
   };
@@ -147,7 +147,7 @@ await mountHarborShowcase({
   packageName: "@plasius/gpu-debug",
   title: "Debug Telemetry in a 3D Harbor",
   subtitle:
-    "Family-coordinated 3D validation for queue, dispatch, and pipeline instrumentation, overlaid on the same harbor scene the metrics describe.",
+    "Family-coordinated moonlit harbor validation for queue, dispatch, and pipeline instrumentation, overlaid on the same living scene the metrics describe.",
   createState,
   updateState,
   describeState,
