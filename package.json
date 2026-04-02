@@ -1,6 +1,6 @@
 {
   "name": "@plasius/gpu-debug",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Opt-in GPU debug instrumentation for tracked memory, dispatch, queue, and frame-budget metrics in Plasius WebGPU runtimes.",
   "type": "module",
   "sideEffects": false,
