@@ -9,6 +9,20 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.1] - 2026-06-17
+
+- **Added**
   - Added `recordWavefrontTelemetry(...)` and `snapshot.wavefront` summaries for
     active ray counts, queue overflows, hit-buffer occupancy, termination
     reasons, hit kinds, and bounce-depth distribution.
