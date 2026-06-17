@@ -1,4 +1,8 @@
-export { createGpuDebugSession, estimateDispatchInvocations } from "./session.js";
+export {
+  createGpuDebugSession,
+  estimateDispatchInvocations,
+  summarizeWavefrontTelemetry,
+} from "./session.js";
 export {
   gpuDebugQueueClasses,
   gpuPipelinePhases,

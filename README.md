@@ -39,6 +39,8 @@ scene from the public `@plasius/gpu-shared` package surface, while
 - Records queue depth, dispatch timings, and estimated invocation counts.
 - Records DAG-ready lane depth and dependency-unlock activity when integrations
   supply those samples.
+- Records compact wavefront queue, hit-buffer, and termination summaries
+  without dumping raw GPU buffers.
 - Summarizes frame-budget pressure alongside dispatch activity.
 - Accepts optional host-supplied hardware hints such as memory capacity or core
   count when a native or privileged runtime can provide them.
@@ -54,6 +56,7 @@ import {
   gpuDebugQueueClasses,
   gpuPipelinePhases,
   gpuResourceCategories,
+  summarizeWavefrontTelemetry,
 } from "@plasius/gpu-debug";
 
 const debug = createGpuDebugSession({
@@ -135,7 +138,27 @@ debug.recordPipelinePhase({
   snapshotAgeMs: 0,
 });
 
-console.log(debug.getSnapshot());
+debug.recordWavefrontTelemetry({
+  owner: "wavefront",
+  queueClass: "render",
+  frameId: "frame-101",
+  bounceDepth: 0,
+  activeRayCount: 128,
+  queueCapacity: 256,
+  hitBufferCount: 92,
+  terminationReasons: [
+    { reason: "emissive", count: 10 },
+    { reason: "environment", count: 4 },
+  ],
+  hitKinds: [
+    { kind: "triangle", count: 78 },
+    { kind: "environment", count: 4 },
+  ],
+});
+
+const snapshot = debug.getSnapshot();
+console.log(snapshot);
+console.log(summarizeWavefrontTelemetry(snapshot.wavefront));
 releaseParticles();
 ```
 
@@ -154,6 +177,8 @@ Portable WebGPU does not currently guarantee authoritative access to:
 - queue-depth and frame-budget summaries,
 - DAG-ready lane and dependency-unlock summaries when integrations report them,
 - pipeline phase and snapshot-lag summaries when integrations report them,
+- wavefront queue, hit-buffer, termination, and bounce-depth summaries when
+  integrations report compact telemetry,
 - optional hardware hints provided by the host runtime.
 
 If a native shell, browser extension, or proprietary platform layer can provide
@@ -167,6 +192,7 @@ an inferred optimization aid rather than a full hardware profiler.
 - `gpuDebugQueueClasses`
 - `gpuPipelinePhases`
 - `gpuResourceCategories`
+- `summarizeWavefrontTelemetry(snapshot.wavefront)`
 
 The exported constants are the docs-first enum contract for integrations that
 need to validate or surface queue classes, pipeline phases, or tracked resource
