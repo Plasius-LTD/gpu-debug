@@ -8,6 +8,7 @@ import {
   gpuDebugQueueClasses,
   gpuPipelinePhases,
   gpuResourceCategories,
+  summarizeWavefrontTelemetry,
 } from "../src/index.js";
 
 describe("gpu debug session", () => {
@@ -219,6 +220,99 @@ describe("gpu debug session", () => {
       },
     ]);
     expect(snapshot.limitations[1]).toContain("core-count");
+  });
+
+  it("summarizes wavefront queue, hit, and termination telemetry", () => {
+    const session = createGpuDebugSession({
+      enabled: true,
+    });
+
+    session.recordWavefrontTelemetry({
+      owner: "wavefront",
+      queueClass: "render",
+      frameId: "frame-7",
+      bounceDepth: 0,
+      activeRayCount: 128,
+      queueCapacity: 256,
+      hitBufferCount: 96,
+      terminationReasons: [
+        { reason: "emissive", count: 12 },
+        { reason: "environment", count: 4 },
+      ],
+      hitKinds: [
+        { kind: "triangle", count: 80 },
+        { kind: "environment", count: 4 },
+      ],
+    });
+    session.recordWavefrontTelemetry({
+      owner: "wavefront",
+      queueClass: "render",
+      frameId: "frame-7",
+      bounceDepth: 1,
+      activeRayCount: 48,
+      queueCapacity: 64,
+      overflowCount: 3,
+      hitBufferCount: 44,
+      terminationReasons: [
+        { reason: "max-depth", count: 2 },
+        { reason: "environment", count: 6 },
+      ],
+      hitKinds: [
+        { kind: "triangle", count: 18 },
+        { kind: "emissive", count: 9 },
+      ],
+    });
+
+    const snapshot = session.getSnapshot();
+    expect(snapshot.wavefront.sampleCount).toBe(2);
+    expect(snapshot.wavefront.peakActiveRayCount).toBe(128);
+    expect(snapshot.wavefront.totalOverflowCount).toBe(3);
+    expect(snapshot.wavefront.maxBounceDepth).toBe(1);
+    expect(snapshot.wavefront.byTerminationReason).toEqual([
+      { reason: "emissive", count: 12 },
+      { reason: "environment", count: 10 },
+      { reason: "max-depth", count: 2 },
+    ]);
+    expect(snapshot.wavefront.byHitKind).toEqual([
+      { kind: "triangle", count: 98 },
+      { kind: "emissive", count: 9 },
+      { kind: "environment", count: 4 },
+    ]);
+    expect(snapshot.wavefront.byBounceDepth).toEqual([
+      {
+        bounceDepth: 0,
+        sampleCount: 1,
+        averageActiveRayCount: 128,
+        peakActiveRayCount: 128,
+        averageHitBufferCount: 96,
+        peakHitBufferCount: 96,
+        totalOverflowCount: 0,
+      },
+      {
+        bounceDepth: 1,
+        sampleCount: 1,
+        averageActiveRayCount: 48,
+        peakActiveRayCount: 48,
+        averageHitBufferCount: 44,
+        peakHitBufferCount: 44,
+        totalOverflowCount: 3,
+      },
+    ]);
+
+    expect(summarizeWavefrontTelemetry(snapshot.wavefront)).toEqual([
+      "Wavefront telemetry: 2 samples, peak 128 active rays, overflow 3, max bounce 1.",
+      "Termination reasons: emissive=12, environment=10, max-depth=2.",
+      "Hit kinds: triangle=98, emissive=9, environment=4.",
+      "Bounce depth: b0 avg=128.0 peak=128; b1 avg=48.0 peak=48.",
+    ]);
+  });
+
+  it("handles empty wavefront telemetry summaries", () => {
+    const session = createGpuDebugSession({ enabled: true });
+    expect(session.getSnapshot().wavefront.sampleCount).toBe(0);
+    expect(summarizeWavefrontTelemetry(session.getSnapshot().wavefront)).toEqual([
+      "Wavefront telemetry: no samples recorded.",
+    ]);
   });
 
   it("bounds retained histories and ignores aborted inputs", () => {

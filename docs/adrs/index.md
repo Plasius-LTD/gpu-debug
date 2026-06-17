@@ -5,3 +5,4 @@
 - [ADR-0003: Caller-Tracked Allocation Accounting](./adr-0003-caller-tracked-allocation-accounting.md)
 - [ADR-0004: Local Debug Hooks and Analytics Routing](./adr-0004-local-debug-hooks-and-analytics-routing.md)
 - [ADR-0005: Simulation-to-Visual Phase Telemetry](./adr-0005-simulation-to-visual-phase-telemetry.md)
+- [ADR-0006: Wavefront Queue and Hit Summaries](./adr-0006-wavefront-queue-and-hit-summaries.md)

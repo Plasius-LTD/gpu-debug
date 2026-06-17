@@ -148,6 +148,9 @@ await mountHarborShowcase({
   title: "Debug Telemetry in a 3D Harbor",
   subtitle:
     "Family-coordinated moonlit harbor validation for queue, dispatch, and pipeline instrumentation, overlaid on the same living scene the metrics describe.",
+  __showcaseFeatureLoaders: {
+    debug: async () => import("../dist/index.js"),
+  },
   createState,
   updateState,
   describeState,

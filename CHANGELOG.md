@@ -9,10 +9,15 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added `recordWavefrontTelemetry(...)` and `snapshot.wavefront` summaries for
+    active ray counts, queue overflows, hit-buffer occupancy, termination
+    reasons, hit kinds, and bounce-depth distribution.
+  - Added `summarizeWavefrontTelemetry(...)` as a compact formatting helper for
+    wavefront diagnostics.
 
 - **Changed**
-  - (placeholder)
+  - The browser demo now lazy-loads the local debug bundle through the harbor
+    showcase feature loader so disabled sessions stay cheap by default.
 
 - **Fixed**
   - (placeholder)

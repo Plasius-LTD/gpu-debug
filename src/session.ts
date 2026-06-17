@@ -6,6 +6,7 @@ import type {
   GpuDebugSession,
   GpuDebugSessionOptions,
   GpuDebugSnapshot,
+  GpuDebugWavefrontSnapshot,
   GpuDependencyUnlockSample,
   GpuDispatchSample,
   GpuFrameSample,
@@ -13,6 +14,9 @@ import type {
   GpuQueueSample,
   GpuReadyLaneSample,
   GpuResourceCategory,
+  GpuWavefrontHitKindSample,
+  GpuWavefrontTerminationSample,
+  GpuWavefrontTelemetrySample,
   TrackedGpuAllocation,
 } from "./types.js";
 import {
@@ -36,6 +40,7 @@ const DEFAULT_OPTIONS = Object.freeze({
   maxRetainedReadyLaneSamples: 240,
   maxRetainedDependencyUnlockSamples: 240,
   maxRetainedPipelinePhaseSamples: 240,
+  maxRetainedWavefrontSamples: 240,
   maxRetainedFrameSamples: 240,
   maxTrackedAllocations: 512,
 });
@@ -46,6 +51,7 @@ const LIMITATIONS = Object.freeze([
   "Hardware hints are optional caller-supplied metadata and may be platform-specific.",
   "Ready-lane and dependency-unlock diagnostics are caller-reported integration samples, not automatic WebGPU counters.",
   "Pipeline phase and snapshot-lag diagnostics are caller-reported integration samples, not automatic WebGPU counters.",
+  "Wavefront queue, hit-buffer, and termination diagnostics are caller-reported summaries rather than full GPU buffer dumps.",
 ]);
 
 interface NormalizedAllocation extends Omit<TrackedGpuAllocation, "signal"> {
@@ -76,6 +82,24 @@ interface NormalizedPipelinePhaseSample
   durationMs?: number;
   snapshotAgeFrames?: number;
   snapshotAgeMs?: number;
+}
+
+type NormalizedWavefrontHitKindSample = GpuWavefrontHitKindSample;
+
+type NormalizedWavefrontTerminationSample = GpuWavefrontTerminationSample;
+
+interface NormalizedWavefrontTelemetrySample
+  extends Omit<
+    GpuWavefrontTelemetrySample,
+    "signal" | "hitKinds" | "terminationReasons"
+  > {
+  hitKinds: readonly NormalizedWavefrontHitKindSample[];
+  terminationReasons: readonly NormalizedWavefrontTerminationSample[];
+  bounceDepth: number;
+  activeRayCount: number;
+  queueCapacity?: number;
+  overflowCount: number;
+  hitBufferCount?: number;
 }
 
 function clampCount(value: number | undefined, fallback: number): number {
@@ -337,6 +361,130 @@ function normalizePipelinePhaseSample(
   };
 }
 
+function normalizeWavefrontHitKinds(
+  entries: GpuWavefrontTelemetrySample["hitKinds"]
+): readonly NormalizedWavefrontHitKindSample[] {
+  if (entries === undefined) {
+    return Object.freeze([]);
+  }
+  if (!Array.isArray(entries)) {
+    throw new Error("wavefront.hitKinds must be an array when provided.");
+  }
+  return Object.freeze(
+    entries.map((entry, index) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        throw new Error(`wavefront.hitKinds[${index}] must be an object.`);
+      }
+      return Object.freeze({
+        kind: assertIdentifier(`wavefront.hitKinds[${index}].kind`, entry.kind),
+        count:
+          readPositiveInteger(`wavefront.hitKinds[${index}].count`, entry.count) ??
+          1,
+      });
+    })
+  );
+}
+
+function normalizeWavefrontTerminationReasons(
+  entries: GpuWavefrontTelemetrySample["terminationReasons"]
+): readonly NormalizedWavefrontTerminationSample[] {
+  if (entries === undefined) {
+    return Object.freeze([]);
+  }
+  if (!Array.isArray(entries)) {
+    throw new Error(
+      "wavefront.terminationReasons must be an array when provided."
+    );
+  }
+  return Object.freeze(
+    entries.map((entry, index) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        throw new Error(
+          `wavefront.terminationReasons[${index}] must be an object.`
+        );
+      }
+      return Object.freeze({
+        reason: assertIdentifier(
+          `wavefront.terminationReasons[${index}].reason`,
+          entry.reason
+        ),
+        count:
+          readPositiveInteger(
+            `wavefront.terminationReasons[${index}].count`,
+            entry.count
+          ) ?? 1,
+      });
+    })
+  );
+}
+
+function normalizeWavefrontTelemetrySample(
+  sample: GpuWavefrontTelemetrySample
+): NormalizedWavefrontTelemetrySample {
+  if (sample.signal !== undefined && !isAbortSignalLike(sample.signal)) {
+    throw new Error("wavefront.signal must be an AbortSignal when provided.");
+  }
+
+  const queueCapacity = readPositiveInteger(
+    "wavefront.queueCapacity",
+    sample.queueCapacity
+  );
+  const activeRayCount =
+    readNonNegativeNumber("wavefront.activeRayCount", sample.activeRayCount) ?? 0;
+  if (!Number.isInteger(activeRayCount)) {
+    throw new Error("wavefront.activeRayCount must be an integer greater than or equal to zero.");
+  }
+  if (queueCapacity !== undefined && activeRayCount > queueCapacity) {
+    throw new Error(
+      "wavefront.activeRayCount cannot exceed wavefront.queueCapacity."
+    );
+  }
+
+  const bounceDepth =
+    readNonNegativeNumber("wavefront.bounceDepth", sample.bounceDepth) ?? 0;
+  if (!Number.isInteger(bounceDepth)) {
+    throw new Error("wavefront.bounceDepth must be an integer greater than or equal to zero.");
+  }
+
+  const overflowCount =
+    readNonNegativeNumber("wavefront.overflowCount", sample.overflowCount) ?? 0;
+  if (!Number.isInteger(overflowCount)) {
+    throw new Error("wavefront.overflowCount must be an integer greater than or equal to zero.");
+  }
+
+  const hitBufferCount = readNonNegativeNumber(
+    "wavefront.hitBufferCount",
+    sample.hitBufferCount
+  );
+  if (hitBufferCount !== undefined && !Number.isInteger(hitBufferCount)) {
+    throw new Error(
+      "wavefront.hitBufferCount must be an integer greater than or equal to zero."
+    );
+  }
+
+  return {
+    owner: assertIdentifier("wavefront.owner", sample.owner),
+    queueClass: assertEnumValue(
+      "wavefront.queueClass",
+      sample.queueClass,
+      gpuDebugQueueClasses
+    ),
+    frameId:
+      sample.frameId === undefined
+        ? undefined
+        : assertIdentifier("wavefront.frameId", sample.frameId),
+    bounceDepth,
+    activeRayCount,
+    queueCapacity,
+    overflowCount,
+    hitBufferCount,
+    hitKinds: normalizeWavefrontHitKinds(sample.hitKinds),
+    terminationReasons: normalizeWavefrontTerminationReasons(
+      sample.terminationReasons
+    ),
+  };
+}
+
 export function estimateDispatchInvocations(sample: GpuDispatchSample): number {
   const normalized = normalizeDispatchSample(sample);
   return (
@@ -374,6 +522,10 @@ export function createGpuDebugSession(
       options.maxRetainedPipelinePhaseSamples,
       DEFAULT_OPTIONS.maxRetainedPipelinePhaseSamples
     ),
+    maxRetainedWavefrontSamples: clampCount(
+      options.maxRetainedWavefrontSamples,
+      DEFAULT_OPTIONS.maxRetainedWavefrontSamples
+    ),
     maxRetainedFrameSamples: clampCount(
       options.maxRetainedFrameSamples,
       DEFAULT_OPTIONS.maxRetainedFrameSamples
@@ -393,6 +545,7 @@ export function createGpuDebugSession(
   const dispatchSamples: NormalizedDispatchSample[] = [];
   const dependencyUnlockSamples: NormalizedDependencyUnlockSample[] = [];
   const pipelinePhaseSamples: NormalizedPipelinePhaseSample[] = [];
+  const wavefrontSamples: NormalizedWavefrontTelemetrySample[] = [];
   const frameSamples: NormalizedFrameSample[] = [];
   let peakTrackedBytes = 0;
 
@@ -721,6 +874,106 @@ export function createGpuDebugSession(
     };
   };
 
+  const buildWavefrontSnapshot = (): GpuDebugWavefrontSnapshot => {
+    const activeRayCounts = wavefrontSamples.map((sample) => sample.activeRayCount);
+    const hitBufferCounts = wavefrontSamples
+      .map((sample) => sample.hitBufferCount)
+      .filter((value): value is number => value !== undefined);
+
+    const byBounceDepth = new Map<
+      number,
+      {
+        bounceDepth: number;
+        sampleCount: number;
+        activeRayCounts: number[];
+        hitBufferCounts: number[];
+        totalOverflowCount: number;
+      }
+    >();
+    const byTerminationReason = new Map<string, number>();
+    const byHitKind = new Map<string, number>();
+
+    const peakQueueUtilizationRatio = wavefrontSamples.reduce<number | undefined>(
+      (peak, sample) => {
+        if (sample.queueCapacity === undefined) {
+          return peak;
+        }
+        const ratio = sample.activeRayCount / sample.queueCapacity;
+        return peak === undefined ? ratio : Math.max(peak, ratio);
+      },
+      undefined
+    );
+
+    let totalOverflowCount = 0;
+    let peakOverflowCount = 0;
+    let maxBounceDepth: number | undefined;
+
+    for (const sample of wavefrontSamples) {
+      totalOverflowCount += sample.overflowCount;
+      peakOverflowCount = Math.max(peakOverflowCount, sample.overflowCount);
+      maxBounceDepth =
+        maxBounceDepth === undefined
+          ? sample.bounceDepth
+          : Math.max(maxBounceDepth, sample.bounceDepth);
+
+      const bucket = byBounceDepth.get(sample.bounceDepth) ?? {
+        bounceDepth: sample.bounceDepth,
+        sampleCount: 0,
+        activeRayCounts: [],
+        hitBufferCounts: [],
+        totalOverflowCount: 0,
+      };
+      bucket.sampleCount += 1;
+      bucket.activeRayCounts.push(sample.activeRayCount);
+      if (sample.hitBufferCount !== undefined) {
+        bucket.hitBufferCounts.push(sample.hitBufferCount);
+      }
+      bucket.totalOverflowCount += sample.overflowCount;
+      byBounceDepth.set(sample.bounceDepth, bucket);
+
+      for (const reason of sample.terminationReasons) {
+        pushAggregate(byTerminationReason, reason.reason, reason.count);
+      }
+      for (const kind of sample.hitKinds) {
+        pushAggregate(byHitKind, kind.kind, kind.count);
+      }
+    }
+
+    return {
+      sampleCount: wavefrontSamples.length,
+      averageActiveRayCount: average(activeRayCounts) ?? 0,
+      peakActiveRayCount:
+        activeRayCounts.length > 0 ? Math.max(...activeRayCounts) : 0,
+      peakQueueUtilizationRatio,
+      maxBounceDepth,
+      totalOverflowCount,
+      peakOverflowCount,
+      averageHitBufferCount: average(hitBufferCounts),
+      peakHitBufferCount:
+        hitBufferCounts.length > 0 ? Math.max(...hitBufferCounts) : undefined,
+      byBounceDepth: [...byBounceDepth.values()]
+        .map((bucket) => ({
+          bounceDepth: bucket.bounceDepth,
+          sampleCount: bucket.sampleCount,
+          averageActiveRayCount: average(bucket.activeRayCounts) ?? 0,
+          peakActiveRayCount: Math.max(...bucket.activeRayCounts),
+          averageHitBufferCount: average(bucket.hitBufferCounts),
+          peakHitBufferCount:
+            bucket.hitBufferCounts.length > 0
+              ? Math.max(...bucket.hitBufferCounts)
+              : undefined,
+          totalOverflowCount: bucket.totalOverflowCount,
+        }))
+        .sort((left, right) => left.bounceDepth - right.bounceDepth),
+      byTerminationReason: [...byTerminationReason.entries()]
+        .map(([reason, count]) => ({ reason, count }))
+        .sort((left, right) => right.count - left.count),
+      byHitKind: [...byHitKind.entries()]
+        .map(([kind, count]) => ({ kind, count }))
+        .sort((left, right) => right.count - left.count),
+    };
+  };
+
   return {
     isEnabled() {
       return enabled;
@@ -810,6 +1063,15 @@ export function createGpuDebugSession(
       );
       return true;
     },
+    recordWavefrontTelemetry(sample) {
+      if (!enabled || sample.signal?.aborted === true) {
+        return false;
+      }
+
+      wavefrontSamples.push(normalizeWavefrontTelemetrySample(sample));
+      trimHistory(wavefrontSamples, settings.maxRetainedWavefrontSamples);
+      return true;
+    },
     recordFrame(sample) {
       if (!enabled || sample.signal?.aborted === true) {
         return false;
@@ -870,6 +1132,7 @@ export function createGpuDebugSession(
         },
         dag: buildDagSnapshot(),
         pipeline: buildPipelineSnapshot(),
+        wavefront: buildWavefrontSnapshot(),
         limitations: LIMITATIONS,
       };
 
@@ -883,8 +1146,54 @@ export function createGpuDebugSession(
       dispatchSamples.splice(0, dispatchSamples.length);
       dependencyUnlockSamples.splice(0, dependencyUnlockSamples.length);
       pipelinePhaseSamples.splice(0, pipelinePhaseSamples.length);
+      wavefrontSamples.splice(0, wavefrontSamples.length);
       frameSamples.splice(0, frameSamples.length);
       peakTrackedBytes = 0;
     },
   };
+}
+
+export function summarizeWavefrontTelemetry(
+  snapshot: GpuDebugWavefrontSnapshot | undefined
+): readonly string[] {
+  if (!snapshot || snapshot.sampleCount === 0) {
+    return Object.freeze(["Wavefront telemetry: no samples recorded."]);
+  }
+
+  const lines = [
+    `Wavefront telemetry: ${snapshot.sampleCount} samples, peak ${snapshot.peakActiveRayCount} active rays, overflow ${snapshot.totalOverflowCount}, max bounce ${snapshot.maxBounceDepth ?? 0}.`,
+  ];
+
+  if (snapshot.byTerminationReason.length > 0) {
+    lines.push(
+      `Termination reasons: ${snapshot.byTerminationReason
+        .slice(0, 3)
+        .map((entry) => `${entry.reason}=${entry.count}`)
+        .join(", ")}.`
+    );
+  } else {
+    lines.push("Termination reasons: none recorded.");
+  }
+
+  if (snapshot.byHitKind.length > 0) {
+    lines.push(
+      `Hit kinds: ${snapshot.byHitKind
+        .slice(0, 3)
+        .map((entry) => `${entry.kind}=${entry.count}`)
+        .join(", ")}.`
+    );
+  } else {
+    lines.push("Hit kinds: none recorded.");
+  }
+
+  lines.push(
+    `Bounce depth: ${snapshot.byBounceDepth
+      .map(
+        (entry) =>
+          `b${entry.bounceDepth} avg=${entry.averageActiveRayCount.toFixed(1)} peak=${entry.peakActiveRayCount}`
+      )
+      .join("; ")}.`
+  );
+
+  return Object.freeze(lines);
 }

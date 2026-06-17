@@ -48,6 +48,7 @@ export interface GpuDebugSessionOptions {
   maxRetainedReadyLaneSamples?: number;
   maxRetainedDependencyUnlockSamples?: number;
   maxRetainedPipelinePhaseSamples?: number;
+  maxRetainedWavefrontSamples?: number;
   maxRetainedFrameSamples?: number;
   maxTrackedAllocations?: number;
 }
@@ -124,6 +125,30 @@ export interface GpuPipelinePhaseSample {
   snapshotFrameId?: string;
   snapshotAgeFrames?: number;
   snapshotAgeMs?: number;
+  signal?: AbortSignal;
+}
+
+export interface GpuWavefrontHitKindSample {
+  kind: string;
+  count: number;
+}
+
+export interface GpuWavefrontTerminationSample {
+  reason: string;
+  count: number;
+}
+
+export interface GpuWavefrontTelemetrySample {
+  owner: string;
+  queueClass: GpuDebugQueueClass;
+  frameId?: string;
+  bounceDepth: number;
+  activeRayCount: number;
+  queueCapacity?: number;
+  overflowCount?: number;
+  hitBufferCount?: number;
+  hitKinds?: readonly GpuWavefrontHitKindSample[];
+  terminationReasons?: readonly GpuWavefrontTerminationSample[];
   signal?: AbortSignal;
 }
 
@@ -235,6 +260,35 @@ export interface GpuDebugPipelineSnapshot {
   }[];
 }
 
+export interface GpuDebugWavefrontSnapshot {
+  sampleCount: number;
+  averageActiveRayCount: number;
+  peakActiveRayCount: number;
+  peakQueueUtilizationRatio?: number;
+  maxBounceDepth?: number;
+  totalOverflowCount: number;
+  peakOverflowCount: number;
+  averageHitBufferCount?: number;
+  peakHitBufferCount?: number;
+  byBounceDepth: readonly {
+    bounceDepth: number;
+    sampleCount: number;
+    averageActiveRayCount: number;
+    peakActiveRayCount: number;
+    averageHitBufferCount?: number;
+    peakHitBufferCount?: number;
+    totalOverflowCount: number;
+  }[];
+  byTerminationReason: readonly {
+    reason: string;
+    count: number;
+  }[];
+  byHitKind: readonly {
+    kind: string;
+    count: number;
+  }[];
+}
+
 export interface GpuDebugSnapshot {
   enabled: boolean;
   adapter: Readonly<GpuDebugAdapterInfo>;
@@ -244,6 +298,7 @@ export interface GpuDebugSnapshot {
   frames: GpuDebugFrameSnapshot;
   dag: GpuDebugDagSnapshot;
   pipeline: GpuDebugPipelineSnapshot;
+  wavefront: GpuDebugWavefrontSnapshot;
   limitations: readonly string[];
 }
 
@@ -257,6 +312,7 @@ export interface GpuDebugSession {
   recordDispatch(sample: GpuDispatchSample): boolean;
   recordDependencyUnlock(sample: GpuDependencyUnlockSample): boolean;
   recordPipelinePhase(sample: GpuPipelinePhaseSample): boolean;
+  recordWavefrontTelemetry(sample: GpuWavefrontTelemetrySample): boolean;
   recordFrame(sample: GpuFrameSample): boolean;
   getSnapshot(): GpuDebugSnapshot;
   reset(): void;
