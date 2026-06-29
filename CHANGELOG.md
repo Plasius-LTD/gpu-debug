@@ -12,6 +12,20 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
   - (placeholder)
 
 - **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.4] - 2026-06-29
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
   - Refreshed the published dependency baseline to `@plasius/gpu-shared@^1.0.1`,
     `eslint@^10.6.0`, and `@types/node@^26.0.1`, and regenerated the npm
     lockfile from a clean Node 24 install.
@@ -214,3 +228,4 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 [0.1.5]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.1.5
 [0.2.2]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.2
 [0.2.3]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.3
+[0.2.4]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.4
