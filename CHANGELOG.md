@@ -12,7 +12,9 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
   - (placeholder)
 
 - **Changed**
-  - (placeholder)
+  - Refreshed the published dependency baseline to `@plasius/gpu-shared@^1.0.1`,
+    `eslint@^10.6.0`, and `@types/node@^26.0.1`, and regenerated the npm
+    lockfile from a clean Node 24 install.
 
 - **Fixed**
   - (placeholder)
