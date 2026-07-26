@@ -12,12 +12,13 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
   - (placeholder)
 
 - **Changed**
-  - (placeholder)
+  - Updated to the surviving `@plasius/gpu-shared` 1.0.14 line and the fixed esbuild resolution.
 
 - **Fixed**
   - (placeholder)
 
 - **Security**
+  - Added fail-closed source and npm-package admission for the administrative contributor registry and pinned the CI/CD runtime to Node.js 24.18.0 LTS.
   - (placeholder)
 
 ## [0.2.4] - 2026-06-29
