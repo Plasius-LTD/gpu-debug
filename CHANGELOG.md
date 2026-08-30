@@ -12,6 +12,20 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
   - (placeholder)
 
 - **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.5] - 2026-08-30
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
   - Updated to the released `@plasius/gpu-shared` 1.1.0 immutable Zero-Three
     evidence line and the fixed esbuild resolution.
 
@@ -238,3 +252,4 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 [0.2.2]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.2
 [0.2.3]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.3
 [0.2.4]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.4
+[0.2.5]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.5
