@@ -12,14 +12,68 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
   - (placeholder)
 
 - **Changed**
-  - Bound npm publication to the exact prepared `main` commit after successful push-triggered CI.
-  - Updated to the surviving `@plasius/gpu-shared` 1.0.14 line and the fixed esbuild resolution.
+  - (placeholder)
 
 - **Fixed**
   - (placeholder)
 
 - **Security**
-  - Removed the npm write-token path, added a fail-closed npm 11.5.1-or-newer OIDC guard, and denied fork PR code access to self-hosted CI.
+  - (placeholder)
+
+## [0.2.7] - 2026-08-31
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - Fixed fixed-SPP telemetry admission so exact tile/sample/depth readback
+    record counts are preserved independently from the collapsed per-bounce
+    histogram while mismatched expected/captured records still fail closed.
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.6] - 2026-08-31
+
+- **Added**
+  - Added bounded fixed-SPP renderer telemetry ingestion and summaries for ray
+    counts, path segments, timing evidence, timestamp-query status, and telemetry
+    memory without initiating GPU readbacks.
+  - Added `summarizeFixedSppTelemetry(...)` for compact operator evidence.
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.5] - 2026-08-30
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - Updated to the released `@plasius/gpu-shared` 1.1.0 immutable Zero-Three
+    evidence line and the fixed esbuild resolution.
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - Added permanent fail-closed Zero-Three validation across manifests,
+    dependency graphs, imports, declarations, aliases, optional debug bundles,
+    npm tarballs, SBOMs, and active documentation, with immutable CI/CD evidence
+    and no compatibility fallback.
+  - Replaced the legacy write-token publication path with exact-main npm OIDC
+    publication of a sealed tarball, SBOM, and attested Zero-Three evidence.
+  - Pinned patched transitive npm dependencies to clear the current audit baseline.
   - Added fail-closed source and npm-package admission for the administrative contributor registry and pinned the CI/CD runtime to Node.js 24.18.0 LTS.
   - (placeholder)
 
@@ -232,3 +286,6 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 [0.2.2]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.2
 [0.2.3]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.3
 [0.2.4]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.4
+[0.2.5]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.5
+[0.2.6]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.6
+[0.2.7]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.7

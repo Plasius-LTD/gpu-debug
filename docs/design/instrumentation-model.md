@@ -15,6 +15,7 @@ The package uses a single session object that stores bounded local histories for
 - ready-lane samples,
 - dispatch samples,
 - dependency-unlock samples,
+- fixed-SPP renderer frame samples,
 - frame samples.
 
 ## Snapshot Semantics
@@ -26,6 +27,19 @@ The package uses a single session object that stores bounded local histories for
 - DAG summaries describe ready-lane pressure and downstream unlock flow where
   the caller reports those events.
 - Frame summaries describe budget pressure and optional GPU busy time.
+- Fixed-SPP summaries aggregate caller-resolved primary/secondary rays, path
+  segments, timing evidence, evidence status, and telemetry memory. Missing GPU
+  measurements stay missing and are never inferred from CPU timing.
+- Exact captured/expected GPU record counts are retained independently from
+  their collapsed per-bounce histogram; available evidence requires matching
+  positive record counts and a histogram sum equal to total path segments.
+
+## Fixed-SPP Ingestion Boundary
+
+`recordFixedSppTelemetry(...)` is deliberately passive. The renderer decides
+whether to collect counters or timestamps and supplies its completed frame
+statistics. The debug session validates, bounds, and summarizes those values; it
+never initiates readback, command submission, or timestamp queries.
 
 ## Hardware Hints
 

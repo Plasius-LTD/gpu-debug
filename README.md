@@ -41,6 +41,8 @@ scene from the public `@plasius/gpu-shared` package surface, while
   supply those samples.
 - Records compact wavefront queue, hit-buffer, and termination summaries
   without dumping raw GPU buffers.
+- Retains bounded fixed-SPP renderer evidence for primary/secondary rays, path
+  segments, GPU/render-job timing, timestamp-query status, and telemetry memory.
 - Summarizes frame-budget pressure alongside dispatch activity.
 - Accepts optional host-supplied hardware hints such as memory capacity or core
   count when a native or privileged runtime can provide them.
@@ -56,6 +58,7 @@ import {
   gpuDebugQueueClasses,
   gpuPipelinePhases,
   gpuResourceCategories,
+  summarizeFixedSppTelemetry,
   summarizeWavefrontTelemetry,
 } from "@plasius/gpu-debug";
 
@@ -156,9 +159,26 @@ debug.recordWavefrontTelemetry({
   ],
 });
 
+// Pass statistics already resolved by @plasius/gpu-renderer. This call never
+// initiates a GPU readback or enables renderer diagnostics on its own.
+debug.recordFixedSppTelemetry({
+  owner: "wavefront",
+  queueClass: "render",
+  frameId: "frame-101",
+  samplesPerPixel: rendererStats.samplesPerPixel,
+  renderedSamplesPerPixel: rendererStats.renderedSamplesPerPixel,
+  primaryRays: rendererStats.primaryRays,
+  secondaryRays: rendererStats.secondaryRays,
+  totalPathSegments: rendererStats.totalPathSegments,
+  rayCounts: rendererStats.rayCounts,
+  timings: rendererStats.timings,
+  telemetryMemoryBytes: rendererStats.telemetryMemoryBytes,
+});
+
 const snapshot = debug.getSnapshot();
 console.log(snapshot);
 console.log(summarizeWavefrontTelemetry(snapshot.wavefront));
+console.log(summarizeFixedSppTelemetry(snapshot.fixedSpp));
 releaseParticles();
 ```
 
@@ -179,6 +199,8 @@ Portable WebGPU does not currently guarantee authoritative access to:
 - pipeline phase and snapshot-lag summaries when integrations report them,
 - wavefront queue, hit-buffer, termination, and bounce-depth summaries when
   integrations report compact telemetry,
+- fixed-SPP ray, path-segment, timing, timestamp-query, and telemetry-memory
+  evidence when renderer integrations report already-resolved frame statistics,
 - optional hardware hints provided by the host runtime.
 
 If a native shell, browser extension, or proprietary platform layer can provide
@@ -189,6 +211,7 @@ an inferred optimization aid rather than a full hardware profiler.
 
 - `createGpuDebugSession(options?)`
 - `estimateDispatchInvocations(sample)`
+- `summarizeFixedSppTelemetry(snapshot.fixedSpp)`
 - `gpuDebugQueueClasses`
 - `gpuPipelinePhases`
 - `gpuResourceCategories`
@@ -197,6 +220,19 @@ an inferred optimization aid rather than a full hardware profiler.
 The exported constants are the docs-first enum contract for integrations that
 need to validate or surface queue classes, pipeline phases, or tracked resource
 categories without importing internal validation helpers.
+
+`recordFixedSppTelemetry(sample)` accepts the fixed-SPP subset of the canonical
+renderer frame statistics structurally, so `gpu-debug` does not need a runtime
+dependency on the renderer. The method is a local ingestion boundary only: it
+does not call a renderer, map a buffer, request timestamps, or read GPU memory.
+Nullable secondary-ray, path-segment, and GPU-time values remain nullable in the
+snapshot, while aggregates explicitly identify how many samples were measured.
+GPU counter record cardinality is validated independently from the collapsed
+bounce histogram: available evidence requires a positive
+`capturedRayCounts === expectedRayCounts`, while histogram buckets must sum to
+`totalPathSegments`. A renderer can therefore report many tile/sample/depth
+records collapsed into a smaller per-bounce histogram without losing the exact
+readback count.
 
 ## Worker and Frame Correlation
 
@@ -310,7 +346,22 @@ npm run typecheck
 npm run test:coverage
 npm run build
 npm run pack:check
+npm run zero-three
 ```
+
+## Permanent Zero-Three invariant
+
+`@plasius/gpu-debug` provides optional local-first WebGPU instrumentation.
+Three.js, Three.js subpaths, TSL, `@types/three`, `@react-three/*`, and packages
+whose dependency graph reaches Three.js are permanently prohibited from source,
+manifests, locks, installed dependency graphs, declarations, optional debug
+bundles, npm tarballs, SBOMs, tests, tooling, and active usage documentation.
+There is no compatibility mode, waiver, rollback, or fallback.
+
+Run `npm run zero-three:source` before dependency installation and `npm run
+zero-three` after building and installing to generate complete package evidence.
+The canonical architectural decision is the site ADR
+[ADR 0168](https://github.com/Plasius-LTD/plasius-ltd-site/blob/main/docs/adrs/adr-0168-three-js-is-prohibited-from-gpu-native-rendering.md).
 
 ## Release Automation
 
@@ -335,10 +386,10 @@ GitHub Actions now carries the package delivery path:
 ## Release integrity
 
 CI keeps the administrative contributor registry outside Git and npm package
-artifacts using exact, case-normalised path checks. CI runs on approved
-self-hosted runners for same-repository pull requests and `main`; fork PR code
-is denied. Publication uses the GitHub-hosted `production` job with Node 24 and
-npm 11.5.1 or newer. It is token-free and proceeds only while the prepared SHA
-is the exact `main` head after successful push-triggered CI. Do not dispatch CD
-until the npm trusted-publisher binding is verified.
+artifacts using exact, case-normalised path checks. Repository-owned pull
+requests and `main` execute on GitHub-hosted runners with Node.js 24.18.0 LTS.
+Release preparation lands metadata through the protected branch, waits for
+successful exact-commit CI, and then publishes the sealed package through npm
+OIDC from the `production` environment. The release retains and attests the
+SBOM and complete Zero-Three evidence; there is no legacy npm token fallback.
 <!-- END PLASIUS RELEASE INTEGRITY -->

@@ -1,6 +1,7 @@
 import type {
   GpuDebugDagSnapshot,
   GpuDebugDispatchSnapshot,
+  GpuDebugFixedSppSnapshot,
   GpuDebugPipelineSnapshot,
   GpuDebugQueueSnapshot,
   GpuDebugSession,
@@ -9,6 +10,9 @@ import type {
   GpuDebugWavefrontSnapshot,
   GpuDependencyUnlockSample,
   GpuDispatchSample,
+  GpuFixedSppFrameTimingTelemetry,
+  GpuFixedSppRayCountTelemetry,
+  GpuFixedSppTelemetrySample,
   GpuFrameSample,
   GpuPipelinePhaseSample,
   GpuQueueSample,
@@ -41,6 +45,7 @@ const DEFAULT_OPTIONS = Object.freeze({
   maxRetainedDependencyUnlockSamples: 240,
   maxRetainedPipelinePhaseSamples: 240,
   maxRetainedWavefrontSamples: 240,
+  maxRetainedFixedSppSamples: 240,
   maxRetainedFrameSamples: 240,
   maxTrackedAllocations: 512,
 });
@@ -52,7 +57,36 @@ const LIMITATIONS = Object.freeze([
   "Ready-lane and dependency-unlock diagnostics are caller-reported integration samples, not automatic WebGPU counters.",
   "Pipeline phase and snapshot-lag diagnostics are caller-reported integration samples, not automatic WebGPU counters.",
   "Wavefront queue, hit-buffer, and termination diagnostics are caller-reported summaries rather than full GPU buffer dumps.",
+  "Fixed-SPP ray and timing evidence is retained from caller-resolved renderer statistics; this package does not initiate GPU readbacks.",
 ]);
+
+const FIXED_SPP_RAY_COUNT_STATUSES = Object.freeze([
+  "not-requested",
+  "available",
+  "unavailable",
+  "failed",
+] as const);
+
+const FIXED_SPP_TIMING_STATUSES = Object.freeze([
+  "not-requested",
+  "available",
+  "fallback",
+  "unavailable",
+  "failed",
+] as const);
+
+const FIXED_SPP_TIMESTAMP_QUERY_STATUSES = Object.freeze([
+  "not-recorded",
+  "available",
+  "unsupported",
+  "failed",
+] as const);
+
+const FIXED_SPP_TIMING_SOURCES = Object.freeze([
+  "timestamp-query",
+  "queue-completion",
+  "cpu-submit",
+] as const);
 
 interface NormalizedAllocation extends Omit<TrackedGpuAllocation, "signal"> {
   label?: string;
@@ -100,6 +134,12 @@ interface NormalizedWavefrontTelemetrySample
   queueCapacity?: number;
   overflowCount: number;
   hitBufferCount?: number;
+}
+
+interface NormalizedFixedSppTelemetrySample
+  extends Omit<GpuFixedSppTelemetrySample, "signal" | "rayCounts" | "timings"> {
+  rayCounts: Readonly<GpuFixedSppRayCountTelemetry>;
+  timings: Readonly<GpuFixedSppFrameTimingTelemetry>;
 }
 
 function clampCount(value: number | undefined, fallback: number): number {
@@ -485,6 +525,342 @@ function normalizeWavefrontTelemetrySample(
   };
 }
 
+function readNullableNonNegativeInteger(
+  name: string,
+  value: unknown
+): number | null {
+  if (value === null) {
+    return null;
+  }
+  const parsed = readNonNegativeNumber(name, value);
+  if (parsed === undefined || !Number.isInteger(parsed)) {
+    throw new Error(`${name} must be null or an integer greater than or equal to zero.`);
+  }
+  return parsed;
+}
+
+function readRequiredNonNegativeInteger(name: string, value: unknown): number {
+  const parsed = readNonNegativeNumber(name, value);
+  if (parsed === undefined || !Number.isInteger(parsed)) {
+    throw new Error(`${name} must be an integer greater than or equal to zero.`);
+  }
+  return parsed;
+}
+
+function readRequiredPositiveInteger(name: string, value: unknown): number {
+  const parsed = readPositiveInteger(name, value);
+  if (parsed === undefined) {
+    throw new Error(`${name} must be an integer greater than zero.`);
+  }
+  return parsed;
+}
+
+function readRequiredNonNegativeNumber(name: string, value: unknown): number {
+  const parsed = readNonNegativeNumber(name, value);
+  if (parsed === undefined) {
+    throw new Error(`${name} must be a finite number greater than or equal to zero.`);
+  }
+  return parsed;
+}
+
+function readNullableNonNegativeNumber(
+  name: string,
+  value: unknown
+): number | null {
+  if (value === null) {
+    return null;
+  }
+  const parsed = readNonNegativeNumber(name, value);
+  if (parsed === undefined) {
+    throw new Error(`${name} must be null or a finite number greater than or equal to zero.`);
+  }
+  return parsed;
+}
+
+function normalizeEvidenceReason(name: string, value: unknown): string | null {
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`${name} must be null or a non-empty string.`);
+  }
+  return value.trim().slice(0, 240);
+}
+
+function normalizeFixedSppRayCounts(
+  value: GpuFixedSppRayCountTelemetry
+): Readonly<GpuFixedSppRayCountTelemetry> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("fixedSpp.rayCounts must be an object.");
+  }
+  if (!Array.isArray(value.bounceHistogram)) {
+    throw new Error("fixedSpp.rayCounts.bounceHistogram must be an array.");
+  }
+
+  const status = assertEnumValue(
+    "fixedSpp.rayCounts.status",
+    value.status,
+    FIXED_SPP_RAY_COUNT_STATUSES
+  );
+  const source =
+    value.source === null
+      ? null
+      : assertEnumValue(
+          "fixedSpp.rayCounts.source",
+          value.source,
+          ["gpu-active-queue-readback"] as const
+        );
+  const expectedPrimaryRays = readNullableNonNegativeInteger(
+    "fixedSpp.rayCounts.expectedPrimaryRays",
+    value.expectedPrimaryRays
+  );
+  const observedPrimaryRays = readNullableNonNegativeInteger(
+    "fixedSpp.rayCounts.observedPrimaryRays",
+    value.observedPrimaryRays
+  );
+  const secondaryRays = readNullableNonNegativeInteger(
+    "fixedSpp.rayCounts.secondaryRays",
+    value.secondaryRays
+  );
+  const totalPathSegments = readNullableNonNegativeInteger(
+    "fixedSpp.rayCounts.totalPathSegments",
+    value.totalPathSegments
+  );
+  const bounceHistogram = Object.freeze(
+    value.bounceHistogram.map((count, index) =>
+      readRequiredNonNegativeInteger(
+        `fixedSpp.rayCounts.bounceHistogram[${index}]`,
+        count
+      )
+    )
+  );
+  const capturedRayCounts = readRequiredNonNegativeInteger(
+    "fixedSpp.rayCounts.capturedRayCounts",
+    value.capturedRayCounts
+  );
+  const expectedRayCounts = readRequiredNonNegativeInteger(
+    "fixedSpp.rayCounts.expectedRayCounts",
+    value.expectedRayCounts
+  );
+  const reason = normalizeEvidenceReason(
+    "fixedSpp.rayCounts.reason",
+    value.reason
+  );
+
+  if (status === "available" && capturedRayCounts === 0) {
+    throw new Error(
+      "available fixedSpp.rayCounts require at least one captured ray-count record."
+    );
+  }
+  if (status === "available" && capturedRayCounts !== expectedRayCounts) {
+    throw new Error(
+      "available fixedSpp.rayCounts capturedRayCounts must match expectedRayCounts."
+    );
+  }
+  if (
+    status === "available" &&
+    (source === null ||
+      expectedPrimaryRays === null ||
+      observedPrimaryRays === null ||
+      secondaryRays === null ||
+      totalPathSegments === null)
+  ) {
+    throw new Error(
+      "available fixedSpp.rayCounts require a source and complete ray measurements."
+    );
+  }
+  if (
+    status === "available" &&
+    bounceHistogram.reduce((total, count) => total + count, 0) !==
+      totalPathSegments
+  ) {
+    throw new Error(
+      "available fixedSpp.rayCounts bounce histogram must sum to totalPathSegments."
+    );
+  }
+
+  return Object.freeze({
+    status,
+    source,
+    expectedPrimaryRays,
+    observedPrimaryRays,
+    secondaryRays,
+    totalPathSegments,
+    bounceHistogram,
+    capturedRayCounts,
+    expectedRayCounts,
+    reason,
+  });
+}
+
+function normalizeFixedSppTimings(
+  value: GpuFixedSppFrameTimingTelemetry
+): Readonly<GpuFixedSppFrameTimingTelemetry> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("fixedSpp.timings must be an object.");
+  }
+
+  const status = assertEnumValue(
+    "fixedSpp.timings.status",
+    value.status,
+    FIXED_SPP_TIMING_STATUSES
+  );
+  const source =
+    value.source === null
+      ? null
+      : assertEnumValue(
+          "fixedSpp.timings.source",
+          value.source,
+          FIXED_SPP_TIMING_SOURCES
+        );
+  const timestampQueryStatus = assertEnumValue(
+    "fixedSpp.timings.timestampQueryStatus",
+    value.timestampQueryStatus,
+    FIXED_SPP_TIMESTAMP_QUERY_STATUSES
+  );
+  const totalGpuTimeMs = readNullableNonNegativeNumber(
+    "fixedSpp.timings.totalGpuTimeMs",
+    value.totalGpuTimeMs
+  );
+  const totalRenderJobTimeMs = readRequiredNonNegativeNumber(
+    "fixedSpp.timings.totalRenderJobTimeMs",
+    value.totalRenderJobTimeMs
+  );
+  const classificationTimeMs = readNullableNonNegativeNumber(
+    "fixedSpp.timings.classificationTimeMs",
+    value.classificationTimeMs
+  );
+  const compactionTimeMs = readNullableNonNegativeNumber(
+    "fixedSpp.timings.compactionTimeMs",
+    value.compactionTimeMs
+  );
+  const samplingTimeMs = readNullableNonNegativeNumber(
+    "fixedSpp.timings.samplingTimeMs",
+    value.samplingTimeMs
+  );
+  const reason = normalizeEvidenceReason("fixedSpp.timings.reason", value.reason);
+
+  if (
+    timestampQueryStatus === "available" &&
+    (status !== "available" || source !== "timestamp-query" || totalGpuTimeMs === null)
+  ) {
+    throw new Error(
+      "available timestamp-query evidence requires available timestamp timing and totalGpuTimeMs."
+    );
+  }
+
+  return Object.freeze({
+    status,
+    source,
+    timestampQueryStatus,
+    totalGpuTimeMs,
+    totalRenderJobTimeMs,
+    classificationTimeMs,
+    compactionTimeMs,
+    samplingTimeMs,
+    reason,
+  });
+}
+
+function normalizeFixedSppTelemetrySample(
+  sample: GpuFixedSppTelemetrySample
+): NormalizedFixedSppTelemetrySample {
+  if (sample.signal !== undefined && !isAbortSignalLike(sample.signal)) {
+    throw new Error("fixedSpp.signal must be an AbortSignal when provided.");
+  }
+
+  const samplesPerPixel = readRequiredPositiveInteger(
+    "fixedSpp.samplesPerPixel",
+    sample.samplesPerPixel
+  );
+  const renderedSamplesPerPixel = readRequiredPositiveInteger(
+    "fixedSpp.renderedSamplesPerPixel",
+    sample.renderedSamplesPerPixel
+  );
+  if (renderedSamplesPerPixel > samplesPerPixel) {
+    throw new Error(
+      "fixedSpp.renderedSamplesPerPixel cannot exceed fixedSpp.samplesPerPixel."
+    );
+  }
+
+  const primaryRays = readRequiredNonNegativeInteger(
+    "fixedSpp.primaryRays",
+    sample.primaryRays
+  );
+  const secondaryRays = readNullableNonNegativeInteger(
+    "fixedSpp.secondaryRays",
+    sample.secondaryRays
+  );
+  const totalPathSegments = readNullableNonNegativeInteger(
+    "fixedSpp.totalPathSegments",
+    sample.totalPathSegments
+  );
+  const rayCounts = normalizeFixedSppRayCounts(sample.rayCounts);
+  const timings = normalizeFixedSppTimings(sample.timings);
+  const telemetryMemoryBytes = readRequiredNonNegativeInteger(
+    "fixedSpp.telemetryMemoryBytes",
+    sample.telemetryMemoryBytes
+  );
+
+  if (secondaryRays !== rayCounts.secondaryRays) {
+    throw new Error(
+      "fixedSpp.secondaryRays must match fixedSpp.rayCounts.secondaryRays."
+    );
+  }
+  if (totalPathSegments !== rayCounts.totalPathSegments) {
+    throw new Error(
+      "fixedSpp.totalPathSegments must match fixedSpp.rayCounts.totalPathSegments."
+    );
+  }
+  if ((secondaryRays === null) !== (totalPathSegments === null)) {
+    throw new Error(
+      "fixedSpp.secondaryRays and fixedSpp.totalPathSegments must both be measured or both be null."
+    );
+  }
+  if (secondaryRays !== null && totalPathSegments !== primaryRays + secondaryRays) {
+    throw new Error(
+      "fixedSpp.totalPathSegments must equal primaryRays plus secondaryRays when measured."
+    );
+  }
+  if (
+    rayCounts.expectedPrimaryRays !== null &&
+    rayCounts.expectedPrimaryRays !== primaryRays
+  ) {
+    throw new Error(
+      "fixedSpp.primaryRays must match fixedSpp.rayCounts.expectedPrimaryRays."
+    );
+  }
+  if (
+    rayCounts.status === "available" &&
+    rayCounts.observedPrimaryRays !== primaryRays
+  ) {
+    throw new Error(
+      "available fixedSpp.rayCounts observedPrimaryRays must match primaryRays."
+    );
+  }
+
+  return Object.freeze({
+    owner: assertIdentifier("fixedSpp.owner", sample.owner),
+    queueClass: assertEnumValue(
+      "fixedSpp.queueClass",
+      sample.queueClass,
+      gpuDebugQueueClasses
+    ),
+    frameId:
+      sample.frameId === undefined
+        ? undefined
+        : assertIdentifier("fixedSpp.frameId", sample.frameId),
+    samplesPerPixel,
+    renderedSamplesPerPixel,
+    primaryRays,
+    secondaryRays,
+    totalPathSegments,
+    rayCounts,
+    timings,
+    telemetryMemoryBytes,
+  });
+}
+
 export function estimateDispatchInvocations(sample: GpuDispatchSample): number {
   const normalized = normalizeDispatchSample(sample);
   return (
@@ -526,6 +902,10 @@ export function createGpuDebugSession(
       options.maxRetainedWavefrontSamples,
       DEFAULT_OPTIONS.maxRetainedWavefrontSamples
     ),
+    maxRetainedFixedSppSamples: clampCount(
+      options.maxRetainedFixedSppSamples,
+      DEFAULT_OPTIONS.maxRetainedFixedSppSamples
+    ),
     maxRetainedFrameSamples: clampCount(
       options.maxRetainedFrameSamples,
       DEFAULT_OPTIONS.maxRetainedFrameSamples
@@ -546,6 +926,7 @@ export function createGpuDebugSession(
   const dependencyUnlockSamples: NormalizedDependencyUnlockSample[] = [];
   const pipelinePhaseSamples: NormalizedPipelinePhaseSample[] = [];
   const wavefrontSamples: NormalizedWavefrontTelemetrySample[] = [];
+  const fixedSppSamples: NormalizedFixedSppTelemetrySample[] = [];
   const frameSamples: NormalizedFrameSample[] = [];
   let peakTrackedBytes = 0;
 
@@ -974,6 +1355,92 @@ export function createGpuDebugSession(
     };
   };
 
+  const buildFixedSppSnapshot = (): GpuDebugFixedSppSnapshot => {
+    const primaryRays = fixedSppSamples.map((sample) => sample.primaryRays);
+    const measuredSecondaryRays = fixedSppSamples
+      .map((sample) => sample.secondaryRays)
+      .filter((value): value is number => value !== null);
+    const measuredPathSegments = fixedSppSamples
+      .map((sample) => sample.totalPathSegments)
+      .filter((value): value is number => value !== null);
+    const gpuTimes = fixedSppSamples
+      .map((sample) => sample.timings.totalGpuTimeMs)
+      .filter((value): value is number => value !== null);
+    const renderJobTimes = fixedSppSamples.map(
+      (sample) => sample.timings.totalRenderJobTimeMs
+    );
+    const classificationTimes = fixedSppSamples
+      .map((sample) => sample.timings.classificationTimeMs)
+      .filter((value): value is number => value !== null);
+    const compactionTimes = fixedSppSamples
+      .map((sample) => sample.timings.compactionTimeMs)
+      .filter((value): value is number => value !== null);
+    const samplingTimes = fixedSppSamples
+      .map((sample) => sample.timings.samplingTimeMs)
+      .filter((value): value is number => value !== null);
+    const telemetryMemory = fixedSppSamples.map(
+      (sample) => sample.telemetryMemoryBytes
+    );
+    const byRayCountStatus = new Map<
+      NormalizedFixedSppTelemetrySample["rayCounts"]["status"],
+      number
+    >();
+    const byTimingStatus = new Map<
+      NormalizedFixedSppTelemetrySample["timings"]["status"],
+      number
+    >();
+    const byTimestampQueryStatus = new Map<
+      NormalizedFixedSppTelemetrySample["timings"]["timestampQueryStatus"],
+      number
+    >();
+
+    for (const sample of fixedSppSamples) {
+      pushAggregate(byRayCountStatus, sample.rayCounts.status, 1);
+      pushAggregate(byTimingStatus, sample.timings.status, 1);
+      pushAggregate(
+        byTimestampQueryStatus,
+        sample.timings.timestampQueryStatus,
+        1
+      );
+    }
+
+    return {
+      sampleCount: fixedSppSamples.length,
+      measuredRayCountSampleCount: measuredPathSegments.length,
+      measuredGpuTimeSampleCount: gpuTimes.length,
+      totalPrimaryRays: primaryRays.reduce((total, value) => total + value, 0),
+      totalMeasuredSecondaryRays: measuredSecondaryRays.reduce(
+        (total, value) => total + value,
+        0
+      ),
+      totalMeasuredPathSegments: measuredPathSegments.reduce(
+        (total, value) => total + value,
+        0
+      ),
+      averagePrimaryRays: average(primaryRays),
+      averageMeasuredSecondaryRays: average(measuredSecondaryRays),
+      averageMeasuredPathSegments: average(measuredPathSegments),
+      averageGpuTimeMs: average(gpuTimes),
+      averageRenderJobTimeMs: average(renderJobTimes),
+      averageClassificationTimeMs: average(classificationTimes),
+      averageCompactionTimeMs: average(compactionTimes),
+      averageSamplingTimeMs: average(samplingTimes),
+      peakTelemetryMemoryBytes:
+        telemetryMemory.length > 0 ? Math.max(...telemetryMemory) : 0,
+      byRayCountStatus: [...byRayCountStatus.entries()].map(
+        ([status, count]) => ({ status, count })
+      ),
+      byTimingStatus: [...byTimingStatus.entries()].map(([status, count]) => ({
+        status,
+        count,
+      })),
+      byTimestampQueryStatus: [...byTimestampQueryStatus.entries()].map(
+        ([status, count]) => ({ status, count })
+      ),
+      latest: fixedSppSamples[fixedSppSamples.length - 1],
+    };
+  };
+
   return {
     isEnabled() {
       return enabled;
@@ -1072,6 +1539,15 @@ export function createGpuDebugSession(
       trimHistory(wavefrontSamples, settings.maxRetainedWavefrontSamples);
       return true;
     },
+    recordFixedSppTelemetry(sample) {
+      if (!enabled || sample.signal?.aborted === true) {
+        return false;
+      }
+
+      fixedSppSamples.push(normalizeFixedSppTelemetrySample(sample));
+      trimHistory(fixedSppSamples, settings.maxRetainedFixedSppSamples);
+      return true;
+    },
     recordFrame(sample) {
       if (!enabled || sample.signal?.aborted === true) {
         return false;
@@ -1133,6 +1609,7 @@ export function createGpuDebugSession(
         dag: buildDagSnapshot(),
         pipeline: buildPipelineSnapshot(),
         wavefront: buildWavefrontSnapshot(),
+        fixedSpp: buildFixedSppSnapshot(),
         limitations: LIMITATIONS,
       };
 
@@ -1147,6 +1624,7 @@ export function createGpuDebugSession(
       dependencyUnlockSamples.splice(0, dependencyUnlockSamples.length);
       pipelinePhaseSamples.splice(0, pipelinePhaseSamples.length);
       wavefrontSamples.splice(0, wavefrontSamples.length);
+      fixedSppSamples.splice(0, fixedSppSamples.length);
       frameSamples.splice(0, frameSamples.length);
       peakTrackedBytes = 0;
     },
@@ -1196,4 +1674,40 @@ export function summarizeWavefrontTelemetry(
   );
 
   return Object.freeze(lines);
+}
+
+function summarizeStatusCounts(
+  entries: readonly { status: string; count: number }[]
+): string {
+  return entries.length === 0
+    ? "none"
+    : entries.map((entry) => `${entry.status}=${entry.count}`).join(", ");
+}
+
+function sampleLabel(count: number): string {
+  return count === 1 ? "sample" : "samples";
+}
+
+/** Formats bounded fixed-SPP ray, timing, and telemetry-memory evidence. */
+export function summarizeFixedSppTelemetry(
+  snapshot: GpuDebugFixedSppSnapshot | undefined
+): readonly string[] {
+  if (!snapshot || snapshot.sampleCount === 0) {
+    return Object.freeze(["Fixed-SPP telemetry: no samples recorded."]);
+  }
+
+  const gpuTiming =
+    snapshot.averageGpuTimeMs === undefined
+      ? "GPU unavailable from 0 samples"
+      : `GPU avg ${snapshot.averageGpuTimeMs.toFixed(2)} ms from ${snapshot.measuredGpuTimeSampleCount} ${sampleLabel(snapshot.measuredGpuTimeSampleCount)}`;
+  const renderJobTiming =
+    snapshot.averageRenderJobTimeMs === undefined
+      ? "render-job unavailable from 0 samples"
+      : `render-job avg ${snapshot.averageRenderJobTimeMs.toFixed(2)} ms from ${snapshot.sampleCount} ${sampleLabel(snapshot.sampleCount)}`;
+
+  return Object.freeze([
+    `Fixed-SPP telemetry: ${snapshot.sampleCount} ${sampleLabel(snapshot.sampleCount)}, ${snapshot.totalPrimaryRays} primary rays, ${snapshot.totalMeasuredSecondaryRays} measured secondary rays, ${snapshot.totalMeasuredPathSegments} measured path segments.`,
+    `Timing: ${gpuTiming}; ${renderJobTiming}.`,
+    `Evidence: ray counts ${summarizeStatusCounts(snapshot.byRayCountStatus)}; timestamp queries ${summarizeStatusCounts(snapshot.byTimestampQueryStatus)}; peak telemetry memory ${snapshot.peakTelemetryMemoryBytes} bytes.`,
+  ]);
 }

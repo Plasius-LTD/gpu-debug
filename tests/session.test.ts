@@ -8,6 +8,7 @@ import {
   gpuDebugQueueClasses,
   gpuPipelinePhases,
   gpuResourceCategories,
+  summarizeFixedSppTelemetry,
   summarizeWavefrontTelemetry,
 } from "../src/index.js";
 
@@ -313,6 +314,461 @@ describe("gpu debug session", () => {
     expect(summarizeWavefrontTelemetry(session.getSnapshot().wavefront)).toEqual([
       "Wavefront telemetry: no samples recorded.",
     ]);
+  });
+
+  it("summarizes sparse wavefront evidence without inventing hit data", () => {
+    const session = createGpuDebugSession({ enabled: true });
+    session.recordWavefrontTelemetry({
+      owner: "wavefront",
+      queueClass: "render",
+      bounceDepth: 0,
+      activeRayCount: 0,
+    });
+
+    const snapshot = session.getSnapshot().wavefront;
+    expect(snapshot.peakQueueUtilizationRatio).toBeUndefined();
+    expect(snapshot.averageHitBufferCount).toBeUndefined();
+    expect(snapshot.byBounceDepth[0]?.peakHitBufferCount).toBeUndefined();
+    expect(summarizeWavefrontTelemetry(snapshot)).toEqual([
+      "Wavefront telemetry: 1 samples, peak 0 active rays, overflow 0, max bounce 0.",
+      "Termination reasons: none recorded.",
+      "Hit kinds: none recorded.",
+      "Bounce depth: b0 avg=0.0 peak=0.",
+    ]);
+    expect(() =>
+      session.recordWavefrontTelemetry({
+        owner: "wavefront",
+        queueClass: "render",
+        bounceDepth: 0,
+        activeRayCount: 0.5,
+      })
+    ).toThrow(/activeRayCount must be an integer/);
+  });
+
+  it("retains and summarizes fixed-SPP renderer baseline telemetry", () => {
+    const session = createGpuDebugSession({
+      enabled: true,
+      maxRetainedFixedSppSamples: 2,
+    });
+
+    expect(
+      session.recordFixedSppTelemetry({
+        owner: "wavefront",
+        queueClass: "render",
+        frameId: "frame-8",
+        samplesPerPixel: 2,
+        renderedSamplesPerPixel: 2,
+        primaryRays: 256,
+        secondaryRays: 209,
+        totalPathSegments: 465,
+        rayCounts: {
+          status: "available",
+          source: "gpu-active-queue-readback",
+          expectedPrimaryRays: 256,
+          observedPrimaryRays: 256,
+          secondaryRays: 209,
+          totalPathSegments: 465,
+          bounceHistogram: [256, 125, 84],
+          capturedRayCounts: 48,
+          expectedRayCounts: 48,
+          reason: null,
+        },
+        timings: {
+          status: "available",
+          source: "timestamp-query",
+          timestampQueryStatus: "available",
+          totalGpuTimeMs: 8.25,
+          totalRenderJobTimeMs: 9.5,
+          classificationTimeMs: null,
+          compactionTimeMs: null,
+          samplingTimeMs: 8.25,
+          reason: null,
+        },
+        telemetryMemoryBytes: 48,
+      })
+    ).toBe(true);
+
+    expect(
+      session.getSnapshot().fixedSpp.latest?.rayCounts.capturedRayCounts
+    ).toBe(48);
+    expect(
+      session.getSnapshot().fixedSpp.latest?.rayCounts.expectedRayCounts
+    ).toBe(48);
+
+    session.recordFixedSppTelemetry({
+      owner: "wavefront",
+      queueClass: "render",
+      frameId: "frame-9",
+      samplesPerPixel: 2,
+      renderedSamplesPerPixel: 1,
+      primaryRays: 128,
+      secondaryRays: null,
+      totalPathSegments: null,
+      rayCounts: {
+        status: "unavailable",
+        source: null,
+        expectedPrimaryRays: 128,
+        observedPrimaryRays: null,
+        secondaryRays: null,
+        totalPathSegments: null,
+        bounceHistogram: [],
+        capturedRayCounts: 0,
+        expectedRayCounts: 3,
+        reason: "gpu-work-not-awaited",
+      },
+      timings: {
+        status: "fallback",
+        source: "cpu-submit",
+        timestampQueryStatus: "not-recorded",
+        totalGpuTimeMs: null,
+        totalRenderJobTimeMs: 4.5,
+        classificationTimeMs: null,
+        compactionTimeMs: null,
+        samplingTimeMs: null,
+        reason: "gpu-work-not-awaited",
+      },
+      telemetryMemoryBytes: 0,
+    });
+
+    const snapshot = session.getSnapshot().fixedSpp;
+    expect(snapshot.sampleCount).toBe(2);
+    expect(snapshot.measuredRayCountSampleCount).toBe(1);
+    expect(snapshot.measuredGpuTimeSampleCount).toBe(1);
+    expect(snapshot.totalPrimaryRays).toBe(384);
+    expect(snapshot.totalMeasuredSecondaryRays).toBe(209);
+    expect(snapshot.totalMeasuredPathSegments).toBe(465);
+    expect(snapshot.averageMeasuredSecondaryRays).toBe(209);
+    expect(snapshot.averageMeasuredPathSegments).toBe(465);
+    expect(snapshot.averageGpuTimeMs).toBe(8.25);
+    expect(snapshot.averageRenderJobTimeMs).toBe(7);
+    expect(snapshot.peakTelemetryMemoryBytes).toBe(48);
+    expect(snapshot.byRayCountStatus).toEqual([
+      { status: "available", count: 1 },
+      { status: "unavailable", count: 1 },
+    ]);
+    expect(snapshot.byTimestampQueryStatus).toEqual([
+      { status: "available", count: 1 },
+      { status: "not-recorded", count: 1 },
+    ]);
+    expect(snapshot.latest?.frameId).toBe("frame-9");
+
+    expect(summarizeFixedSppTelemetry(snapshot)).toEqual([
+      "Fixed-SPP telemetry: 2 samples, 384 primary rays, 209 measured secondary rays, 465 measured path segments.",
+      "Timing: GPU avg 8.25 ms from 1 sample; render-job avg 7.00 ms from 2 samples.",
+      "Evidence: ray counts available=1, unavailable=1; timestamp queries available=1, not-recorded=1; peak telemetry memory 48 bytes.",
+    ]);
+  });
+
+  it("keeps fixed-SPP diagnostics disabled, bounded, abortable, and resettable", () => {
+    const session = createGpuDebugSession({ maxRetainedFixedSppSamples: 1 });
+    const sample = {
+      owner: "wavefront",
+      queueClass: "render" as const,
+      frameId: "frame-1",
+      samplesPerPixel: 1,
+      renderedSamplesPerPixel: 1,
+      primaryRays: 64,
+      secondaryRays: 8,
+      totalPathSegments: 72,
+      rayCounts: {
+        status: "available" as const,
+        source: "gpu-active-queue-readback" as const,
+        expectedPrimaryRays: 64,
+        observedPrimaryRays: 64,
+        secondaryRays: 8,
+        totalPathSegments: 72,
+        bounceHistogram: [64, 8],
+        capturedRayCounts: 2,
+        expectedRayCounts: 2,
+        reason: null,
+      },
+      timings: {
+        status: "fallback" as const,
+        source: "queue-completion" as const,
+        timestampQueryStatus: "unsupported" as const,
+        totalGpuTimeMs: null,
+        totalRenderJobTimeMs: 3,
+        classificationTimeMs: null,
+        compactionTimeMs: null,
+        samplingTimeMs: null,
+        reason: "timestamp-query-unsupported",
+      },
+      telemetryMemoryBytes: 32,
+    };
+
+    expect(session.recordFixedSppTelemetry(sample)).toBe(false);
+    expect(session.getSnapshot().fixedSpp.sampleCount).toBe(0);
+
+    session.setEnabled(true);
+    const controller = new AbortController();
+    controller.abort();
+    expect(
+      session.recordFixedSppTelemetry({ ...sample, signal: controller.signal })
+    ).toBe(false);
+
+    expect(session.recordFixedSppTelemetry(sample)).toBe(true);
+    expect(
+      session.recordFixedSppTelemetry({
+        ...sample,
+        frameId: "frame-2",
+        primaryRays: 32,
+        secondaryRays: null,
+        totalPathSegments: null,
+        rayCounts: {
+          ...sample.rayCounts,
+          status: "not-requested",
+          source: null,
+          expectedPrimaryRays: 32,
+          observedPrimaryRays: null,
+          secondaryRays: null,
+          totalPathSegments: null,
+          bounceHistogram: [],
+          capturedRayCounts: 0,
+          reason: null,
+        },
+        telemetryMemoryBytes: 0,
+      })
+    ).toBe(true);
+    expect(session.getSnapshot().fixedSpp.sampleCount).toBe(1);
+    expect(session.getSnapshot().fixedSpp.latest?.frameId).toBe("frame-2");
+
+    session.reset();
+    expect(session.getSnapshot().fixedSpp.sampleCount).toBe(0);
+    expect(summarizeFixedSppTelemetry(session.getSnapshot().fixedSpp)).toEqual([
+      "Fixed-SPP telemetry: no samples recorded.",
+    ]);
+  });
+
+  it("rejects incoherent fixed-SPP renderer evidence", () => {
+    const session = createGpuDebugSession({ enabled: true });
+    const invalid = {
+      owner: "wavefront",
+      queueClass: "render" as const,
+      samplesPerPixel: 1,
+      renderedSamplesPerPixel: 1,
+      primaryRays: 64,
+      secondaryRays: 8,
+      totalPathSegments: 71,
+      rayCounts: {
+        status: "available" as const,
+        source: "gpu-active-queue-readback" as const,
+        expectedPrimaryRays: 64,
+        observedPrimaryRays: 64,
+        secondaryRays: 8,
+        totalPathSegments: 72,
+        bounceHistogram: [64, 8],
+        capturedRayCounts: 2,
+        expectedRayCounts: 2,
+        reason: null,
+      },
+      timings: {
+        status: "available" as const,
+        source: "timestamp-query" as const,
+        timestampQueryStatus: "available" as const,
+        totalGpuTimeMs: 3,
+        totalRenderJobTimeMs: 4,
+        classificationTimeMs: null,
+        compactionTimeMs: null,
+        samplingTimeMs: 3,
+        reason: null,
+      },
+      telemetryMemoryBytes: 48,
+    };
+
+    expect(() => session.recordFixedSppTelemetry(invalid)).toThrow(
+      /fixedSpp.totalPathSegments must match fixedSpp.rayCounts.totalPathSegments/
+    );
+  });
+
+  it("fails closed for malformed fixed-SPP counters and timing evidence", () => {
+    const session = createGpuDebugSession({ enabled: true });
+    const makeSample = () => ({
+      owner: "wavefront",
+      queueClass: "render" as const,
+      samplesPerPixel: 2,
+      renderedSamplesPerPixel: 2,
+      primaryRays: 64,
+      secondaryRays: 8 as number | null,
+      totalPathSegments: 72 as number | null,
+      rayCounts: {
+        status: "available" as const,
+        source: "gpu-active-queue-readback" as
+          | "gpu-active-queue-readback"
+          | null,
+        expectedPrimaryRays: 64 as number | null,
+        observedPrimaryRays: 64 as number | null,
+        secondaryRays: 8 as number | null,
+        totalPathSegments: 72 as number | null,
+        bounceHistogram: [64, 8] as readonly number[],
+        capturedRayCounts: 2,
+        expectedRayCounts: 2,
+        reason: null as string | null,
+      },
+      timings: {
+        status: "available" as
+          | "not-requested"
+          | "available"
+          | "fallback"
+          | "unavailable"
+          | "failed",
+        source: "timestamp-query" as
+          | "timestamp-query"
+          | "queue-completion"
+          | "cpu-submit"
+          | null,
+        timestampQueryStatus: "available" as
+          | "not-recorded"
+          | "available"
+          | "unsupported"
+          | "failed",
+        totalGpuTimeMs: 3 as number | null,
+        totalRenderJobTimeMs: 4,
+        classificationTimeMs: null as number | null,
+        compactionTimeMs: null as number | null,
+        samplingTimeMs: 3 as number | null,
+        reason: null as string | null,
+      },
+      telemetryMemoryBytes: 48,
+    });
+
+    const cases: readonly [RegExp, (sample: ReturnType<typeof makeSample>) => void][] = [
+      [/rayCounts must be an object/, (sample) => {
+        sample.rayCounts = null as never;
+      }],
+      [/bounceHistogram must be an array/, (sample) => {
+        sample.rayCounts.bounceHistogram = "invalid" as never;
+      }],
+      [/expectedPrimaryRays must be null or an integer/, (sample) => {
+        sample.rayCounts.expectedPrimaryRays = 1.5;
+      }],
+      [/primaryRays must be an integer/, (sample) => {
+        sample.primaryRays = 1.5;
+      }],
+      [/totalGpuTimeMs must be null or a finite number/, (sample) => {
+        sample.timings.totalGpuTimeMs = undefined as never;
+      }],
+      [/totalRenderJobTimeMs must be a finite number/, (sample) => {
+        sample.timings.totalRenderJobTimeMs = undefined as never;
+      }],
+      [/samplesPerPixel must be an integer greater than zero/, (sample) => {
+        sample.samplesPerPixel = undefined as never;
+      }],
+      [/reason must be null or a non-empty string/, (sample) => {
+        sample.timings.reason = "";
+      }],
+      [/capturedRayCounts must match expectedRayCounts/, (sample) => {
+        sample.rayCounts.capturedRayCounts = 1;
+      }],
+      [/require at least one captured ray-count record/, (sample) => {
+        sample.rayCounts.capturedRayCounts = 0;
+        sample.rayCounts.expectedRayCounts = 0;
+      }],
+      [/available fixedSpp\.rayCounts require/, (sample) => {
+        sample.rayCounts.source = null;
+      }],
+      [/available fixedSpp\.rayCounts require/, (sample) => {
+        sample.rayCounts.expectedPrimaryRays = null;
+      }],
+      [/available fixedSpp\.rayCounts require/, (sample) => {
+        sample.rayCounts.observedPrimaryRays = null;
+      }],
+      [/available fixedSpp\.rayCounts require/, (sample) => {
+        sample.rayCounts.secondaryRays = null;
+      }],
+      [/available fixedSpp\.rayCounts require/, (sample) => {
+        sample.rayCounts.totalPathSegments = null;
+      }],
+      [/bounce histogram must sum/, (sample) => {
+        sample.rayCounts.bounceHistogram = [64, 7];
+      }],
+      [/timings must be an object/, (sample) => {
+        sample.timings = null as never;
+      }],
+      [/timings\.source must be one of/, (sample) => {
+        sample.timings.source = "invalid" as never;
+      }],
+      [/available timestamp-query evidence requires/, (sample) => {
+        sample.timings.status = "fallback";
+      }],
+      [/available timestamp-query evidence requires/, (sample) => {
+        sample.timings.source = null;
+      }],
+      [/available timestamp-query evidence requires/, (sample) => {
+        sample.timings.totalGpuTimeMs = null;
+      }],
+      [/signal must be an AbortSignal/, (sample) => {
+        (sample as typeof sample & { signal: unknown }).signal = {};
+      }],
+      [/renderedSamplesPerPixel cannot exceed/, (sample) => {
+        sample.renderedSamplesPerPixel = 3;
+      }],
+      [/secondaryRays must match/, (sample) => {
+        sample.secondaryRays = 9;
+      }],
+      [/must both be measured or both be null/, (sample) => {
+        sample.totalPathSegments = null;
+        sample.rayCounts.totalPathSegments = null;
+        sample.rayCounts.status = "unavailable" as never;
+      }],
+      [/must equal primaryRays plus secondaryRays/, (sample) => {
+        sample.totalPathSegments = 71;
+        sample.rayCounts.totalPathSegments = 71;
+        sample.rayCounts.bounceHistogram = [64, 7];
+      }],
+      [/expectedPrimaryRays/, (sample) => {
+        sample.rayCounts.expectedPrimaryRays = 63;
+      }],
+      [/observedPrimaryRays/, (sample) => {
+        sample.rayCounts.observedPrimaryRays = 63;
+      }],
+    ];
+
+    for (const [message, mutate] of cases) {
+      const sample = makeSample();
+      mutate(sample);
+      expect(() => session.recordFixedSppTelemetry(sample)).toThrow(message);
+    }
+  });
+
+  it("reports unavailable fixed-SPP GPU timing without inventing a zero", () => {
+    const session = createGpuDebugSession({ enabled: true });
+    session.recordFixedSppTelemetry({
+      owner: "wavefront",
+      queueClass: "render",
+      samplesPerPixel: 1,
+      renderedSamplesPerPixel: 1,
+      primaryRays: 32,
+      secondaryRays: null,
+      totalPathSegments: null,
+      rayCounts: {
+        status: "not-requested",
+        source: null,
+        expectedPrimaryRays: 32,
+        observedPrimaryRays: null,
+        secondaryRays: null,
+        totalPathSegments: null,
+        bounceHistogram: [],
+        capturedRayCounts: 0,
+        expectedRayCounts: 0,
+        reason: null,
+      },
+      timings: {
+        status: "not-requested",
+        source: null,
+        timestampQueryStatus: "not-recorded",
+        totalGpuTimeMs: null,
+        totalRenderJobTimeMs: 0,
+        classificationTimeMs: null,
+        compactionTimeMs: null,
+        samplingTimeMs: null,
+        reason: null,
+      },
+      telemetryMemoryBytes: 0,
+    });
+
+    expect(summarizeFixedSppTelemetry(session.getSnapshot().fixedSpp)[1]).toBe(
+      "Timing: GPU unavailable from 0 samples; render-job avg 0.00 ms from 1 sample."
+    );
   });
 
   it("bounds retained histories and ignores aborted inputs", () => {
