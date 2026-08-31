@@ -49,6 +49,7 @@ export interface GpuDebugSessionOptions {
   maxRetainedDependencyUnlockSamples?: number;
   maxRetainedPipelinePhaseSamples?: number;
   maxRetainedWavefrontSamples?: number;
+  maxRetainedFixedSppSamples?: number;
   maxRetainedFrameSamples?: number;
   maxTrackedAllocations?: number;
 }
@@ -149,6 +150,74 @@ export interface GpuWavefrontTelemetrySample {
   hitBufferCount?: number;
   hitKinds?: readonly GpuWavefrontHitKindSample[];
   terminationReasons?: readonly GpuWavefrontTerminationSample[];
+  signal?: AbortSignal;
+}
+
+/** Availability state reported by the renderer for exact per-bounce ray counts. */
+export type GpuFixedSppRayCountStatus =
+  | "not-requested"
+  | "available"
+  | "unavailable"
+  | "failed";
+
+/** Timing evidence state reported by the renderer for one fixed-SPP frame. */
+export type GpuFixedSppTimingStatus =
+  | "not-requested"
+  | "available"
+  | "fallback"
+  | "unavailable"
+  | "failed";
+
+/** Timestamp-query availability reported by the renderer. */
+export type GpuFixedSppTimestampQueryStatus =
+  | "not-recorded"
+  | "available"
+  | "unsupported"
+  | "failed";
+
+/** Exact, structurally compatible ray-count evidence from a renderer frame. */
+export interface GpuFixedSppRayCountTelemetry {
+  readonly status: GpuFixedSppRayCountStatus;
+  readonly source: "gpu-active-queue-readback" | null;
+  readonly expectedPrimaryRays: number | null;
+  readonly observedPrimaryRays: number | null;
+  readonly secondaryRays: number | null;
+  readonly totalPathSegments: number | null;
+  readonly bounceHistogram: readonly number[];
+  readonly capturedRayCounts: number;
+  readonly expectedRayCounts: number;
+  readonly reason: string | null;
+}
+
+/** Timing evidence from a fixed-SPP renderer frame. */
+export interface GpuFixedSppFrameTimingTelemetry {
+  readonly status: GpuFixedSppTimingStatus;
+  readonly source: "timestamp-query" | "queue-completion" | "cpu-submit" | null;
+  readonly timestampQueryStatus: GpuFixedSppTimestampQueryStatus;
+  readonly totalGpuTimeMs: number | null;
+  readonly totalRenderJobTimeMs: number;
+  readonly classificationTimeMs: number | null;
+  readonly compactionTimeMs: number | null;
+  readonly samplingTimeMs: number | null;
+  readonly reason: string | null;
+}
+
+/**
+ * Caller-reported fixed-SPP frame evidence. Recording this sample never starts a
+ * readback; callers pass an already-resolved renderer statistics snapshot.
+ */
+export interface GpuFixedSppTelemetrySample {
+  owner: string;
+  queueClass: GpuDebugQueueClass;
+  frameId?: string;
+  samplesPerPixel: number;
+  renderedSamplesPerPixel: number;
+  primaryRays: number;
+  secondaryRays: number | null;
+  totalPathSegments: number | null;
+  rayCounts: GpuFixedSppRayCountTelemetry;
+  timings: GpuFixedSppFrameTimingTelemetry;
+  telemetryMemoryBytes: number;
   signal?: AbortSignal;
 }
 
@@ -289,6 +358,38 @@ export interface GpuDebugWavefrontSnapshot {
   }[];
 }
 
+/** Aggregated fixed-SPP evidence from the session's bounded local history. */
+export interface GpuDebugFixedSppSnapshot {
+  sampleCount: number;
+  measuredRayCountSampleCount: number;
+  measuredGpuTimeSampleCount: number;
+  totalPrimaryRays: number;
+  totalMeasuredSecondaryRays: number;
+  totalMeasuredPathSegments: number;
+  averagePrimaryRays?: number;
+  averageMeasuredSecondaryRays?: number;
+  averageMeasuredPathSegments?: number;
+  averageGpuTimeMs?: number;
+  averageRenderJobTimeMs?: number;
+  averageClassificationTimeMs?: number;
+  averageCompactionTimeMs?: number;
+  averageSamplingTimeMs?: number;
+  peakTelemetryMemoryBytes: number;
+  byRayCountStatus: readonly {
+    status: GpuFixedSppRayCountStatus;
+    count: number;
+  }[];
+  byTimingStatus: readonly {
+    status: GpuFixedSppTimingStatus;
+    count: number;
+  }[];
+  byTimestampQueryStatus: readonly {
+    status: GpuFixedSppTimestampQueryStatus;
+    count: number;
+  }[];
+  latest?: Readonly<Omit<GpuFixedSppTelemetrySample, "signal">>;
+}
+
 export interface GpuDebugSnapshot {
   enabled: boolean;
   adapter: Readonly<GpuDebugAdapterInfo>;
@@ -299,6 +400,7 @@ export interface GpuDebugSnapshot {
   dag: GpuDebugDagSnapshot;
   pipeline: GpuDebugPipelineSnapshot;
   wavefront: GpuDebugWavefrontSnapshot;
+  fixedSpp: GpuDebugFixedSppSnapshot;
   limitations: readonly string[];
 }
 
@@ -313,6 +415,7 @@ export interface GpuDebugSession {
   recordDependencyUnlock(sample: GpuDependencyUnlockSample): boolean;
   recordPipelinePhase(sample: GpuPipelinePhaseSample): boolean;
   recordWavefrontTelemetry(sample: GpuWavefrontTelemetrySample): boolean;
+  recordFixedSppTelemetry(sample: GpuFixedSppTelemetrySample): boolean;
   recordFrame(sample: GpuFrameSample): boolean;
   getSnapshot(): GpuDebugSnapshot;
   reset(): void;

@@ -41,6 +41,8 @@ scene from the public `@plasius/gpu-shared` package surface, while
   supply those samples.
 - Records compact wavefront queue, hit-buffer, and termination summaries
   without dumping raw GPU buffers.
+- Retains bounded fixed-SPP renderer evidence for primary/secondary rays, path
+  segments, GPU/render-job timing, timestamp-query status, and telemetry memory.
 - Summarizes frame-budget pressure alongside dispatch activity.
 - Accepts optional host-supplied hardware hints such as memory capacity or core
   count when a native or privileged runtime can provide them.
@@ -56,6 +58,7 @@ import {
   gpuDebugQueueClasses,
   gpuPipelinePhases,
   gpuResourceCategories,
+  summarizeFixedSppTelemetry,
   summarizeWavefrontTelemetry,
 } from "@plasius/gpu-debug";
 
@@ -156,9 +159,26 @@ debug.recordWavefrontTelemetry({
   ],
 });
 
+// Pass statistics already resolved by @plasius/gpu-renderer. This call never
+// initiates a GPU readback or enables renderer diagnostics on its own.
+debug.recordFixedSppTelemetry({
+  owner: "wavefront",
+  queueClass: "render",
+  frameId: "frame-101",
+  samplesPerPixel: rendererStats.samplesPerPixel,
+  renderedSamplesPerPixel: rendererStats.renderedSamplesPerPixel,
+  primaryRays: rendererStats.primaryRays,
+  secondaryRays: rendererStats.secondaryRays,
+  totalPathSegments: rendererStats.totalPathSegments,
+  rayCounts: rendererStats.rayCounts,
+  timings: rendererStats.timings,
+  telemetryMemoryBytes: rendererStats.telemetryMemoryBytes,
+});
+
 const snapshot = debug.getSnapshot();
 console.log(snapshot);
 console.log(summarizeWavefrontTelemetry(snapshot.wavefront));
+console.log(summarizeFixedSppTelemetry(snapshot.fixedSpp));
 releaseParticles();
 ```
 
@@ -179,6 +199,8 @@ Portable WebGPU does not currently guarantee authoritative access to:
 - pipeline phase and snapshot-lag summaries when integrations report them,
 - wavefront queue, hit-buffer, termination, and bounce-depth summaries when
   integrations report compact telemetry,
+- fixed-SPP ray, path-segment, timing, timestamp-query, and telemetry-memory
+  evidence when renderer integrations report already-resolved frame statistics,
 - optional hardware hints provided by the host runtime.
 
 If a native shell, browser extension, or proprietary platform layer can provide
@@ -189,6 +211,7 @@ an inferred optimization aid rather than a full hardware profiler.
 
 - `createGpuDebugSession(options?)`
 - `estimateDispatchInvocations(sample)`
+- `summarizeFixedSppTelemetry(snapshot.fixedSpp)`
 - `gpuDebugQueueClasses`
 - `gpuPipelinePhases`
 - `gpuResourceCategories`
@@ -197,6 +220,13 @@ an inferred optimization aid rather than a full hardware profiler.
 The exported constants are the docs-first enum contract for integrations that
 need to validate or surface queue classes, pipeline phases, or tracked resource
 categories without importing internal validation helpers.
+
+`recordFixedSppTelemetry(sample)` accepts the fixed-SPP subset of the canonical
+renderer frame statistics structurally, so `gpu-debug` does not need a runtime
+dependency on the renderer. The method is a local ingestion boundary only: it
+does not call a renderer, map a buffer, request timestamps, or read GPU memory.
+Nullable secondary-ray, path-segment, and GPU-time values remain nullable in the
+snapshot, while aggregates explicitly identify how many samples were measured.
 
 ## Worker and Frame Correlation
 
