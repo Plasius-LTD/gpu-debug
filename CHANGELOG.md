@@ -15,6 +15,20 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.8] - 2026-08-31
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Restored package CI admission by removing a duplicate pull-request trigger
     and added an explicit exact-commit validation entry point for reviewed
     release PRs.
@@ -294,3 +308,4 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 [0.2.5]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.5
 [0.2.6]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.6
 [0.2.7]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.7
+[0.2.8]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.8
