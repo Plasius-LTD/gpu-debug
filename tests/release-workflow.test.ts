@@ -36,7 +36,9 @@ describe("package release trust boundary", () => {
   });
 
   it("rejects fork pull requests before running hosted package CI", () => {
+    expect(ciWorkflow).toContain("workflow_dispatch:");
     expect(ciWorkflow).toContain("pull_request:");
+    expect(ciWorkflow.match(/\n {2}pull_request:/gu)).toHaveLength(1);
     expect(ciWorkflow).toContain("Trusted head admission");
     expect(ciWorkflow).toContain("needs: trusted_head");
     expect(ciWorkflow).toContain("runs-on: ubuntu-latest");
