@@ -9,7 +9,10 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added bounded fixed-SPP renderer telemetry ingestion and summaries for ray
+    counts, path segments, timing evidence, timestamp-query status, and telemetry
+    memory without initiating GPU readbacks.
+  - Added `summarizeFixedSppTelemetry(...)` for compact operator evidence.
 
 - **Changed**
   - (placeholder)

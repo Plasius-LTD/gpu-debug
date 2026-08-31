@@ -17,6 +17,18 @@
 - Treat `targetFrameTimeMs` as a caller-supplied value from the performance
   governor when available.
 
+## With `@plasius/gpu-renderer`
+
+- Forward only already-resolved fixed-SPP frame statistics to
+  `recordFixedSppTelemetry(...)`.
+- Keep renderer telemetry opt-in. Enabling a debug session must not enable GPU
+  counters, timestamp queries, readbacks, or queue waits in the renderer.
+- Preserve `null` for unavailable secondary-ray, path-segment, and GPU timing
+  evidence. Do not substitute estimates.
+- Use the same stable `frameId` as other queue, dispatch, and frame samples.
+- The fixed-SPP input is structurally compatible with the renderer statistics
+  subset and does not create a runtime package dependency.
+
 ## With `@plasius/analytics`
 
 - Keep this package local-first.

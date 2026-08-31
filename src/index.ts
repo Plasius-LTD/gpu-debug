@@ -1,6 +1,7 @@
 export {
   createGpuDebugSession,
   estimateDispatchInvocations,
+  summarizeFixedSppTelemetry,
   summarizeWavefrontTelemetry,
 } from "./session.js";
 export {
