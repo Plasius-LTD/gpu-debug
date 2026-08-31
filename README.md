@@ -391,5 +391,7 @@ requests and `main` execute on GitHub-hosted runners with Node.js 24.18.0 LTS.
 Release preparation lands metadata through the protected branch, waits for
 successful exact-commit CI, and then publishes the sealed package through npm
 OIDC from the `production` environment. The release retains and attests the
-SBOM and complete Zero-Three evidence; there is no legacy npm token fallback.
+SBOM and complete Zero-Three evidence, pins the npm release client to 11.6.2,
+and rechecks the exact remote `main` commit immediately before publication;
+there is no legacy npm token fallback.
 <!-- END PLASIUS RELEASE INTEGRITY -->

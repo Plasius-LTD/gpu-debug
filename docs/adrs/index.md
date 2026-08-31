@@ -7,3 +7,4 @@
 - [ADR-0005: Simulation-to-Visual Phase Telemetry](./adr-0005-simulation-to-visual-phase-telemetry.md)
 - [ADR-0006: Wavefront Queue and Hit Summaries](./adr-0006-wavefront-queue-and-hit-summaries.md)
 - [ADR-0007: Passive Fixed-SPP Renderer Evidence](./adr-0007-passive-fixed-spp-renderer-evidence.md)
+- [ADR-0008: Hosted OIDC Package Publication](./adr-0008-hosted-oidc-package-publication.md)

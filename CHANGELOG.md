@@ -18,6 +18,8 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
   - (placeholder)
 
 - **Security**
+  - Pinned the npm OIDC release client to 11.6.2 and revalidate the exact remote
+    `main` commit immediately before npm publication.
   - (placeholder)
 
 ## [0.2.7] - 2026-08-31
