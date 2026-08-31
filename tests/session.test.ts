@@ -369,8 +369,8 @@ describe("gpu debug session", () => {
           secondaryRays: 209,
           totalPathSegments: 465,
           bounceHistogram: [256, 125, 84],
-          capturedRayCounts: 3,
-          expectedRayCounts: 3,
+          capturedRayCounts: 48,
+          expectedRayCounts: 48,
           reason: null,
         },
         timings: {
@@ -387,6 +387,13 @@ describe("gpu debug session", () => {
         telemetryMemoryBytes: 48,
       })
     ).toBe(true);
+
+    expect(
+      session.getSnapshot().fixedSpp.latest?.rayCounts.capturedRayCounts
+    ).toBe(48);
+    expect(
+      session.getSnapshot().fixedSpp.latest?.rayCounts.expectedRayCounts
+    ).toBe(48);
 
     session.recordFixedSppTelemetry({
       owner: "wavefront",
@@ -649,8 +656,12 @@ describe("gpu debug session", () => {
       [/reason must be null or a non-empty string/, (sample) => {
         sample.timings.reason = "";
       }],
-      [/capturedRayCounts must match/, (sample) => {
+      [/capturedRayCounts must match expectedRayCounts/, (sample) => {
         sample.rayCounts.capturedRayCounts = 1;
+      }],
+      [/require at least one captured ray-count record/, (sample) => {
+        sample.rayCounts.capturedRayCounts = 0;
+        sample.rayCounts.expectedRayCounts = 0;
       }],
       [/available fixedSpp\.rayCounts require/, (sample) => {
         sample.rayCounts.source = null;

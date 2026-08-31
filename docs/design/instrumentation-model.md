@@ -30,6 +30,9 @@ The package uses a single session object that stores bounded local histories for
 - Fixed-SPP summaries aggregate caller-resolved primary/secondary rays, path
   segments, timing evidence, evidence status, and telemetry memory. Missing GPU
   measurements stay missing and are never inferred from CPU timing.
+- Exact captured/expected GPU record counts are retained independently from
+  their collapsed per-bounce histogram; available evidence requires matching
+  positive record counts and a histogram sum equal to total path segments.
 
 ## Fixed-SPP Ingestion Boundary
 
