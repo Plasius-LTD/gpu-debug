@@ -227,6 +227,12 @@ dependency on the renderer. The method is a local ingestion boundary only: it
 does not call a renderer, map a buffer, request timestamps, or read GPU memory.
 Nullable secondary-ray, path-segment, and GPU-time values remain nullable in the
 snapshot, while aggregates explicitly identify how many samples were measured.
+GPU counter record cardinality is validated independently from the collapsed
+bounce histogram: available evidence requires a positive
+`capturedRayCounts === expectedRayCounts`, while histogram buckets must sum to
+`totalPathSegments`. A renderer can therefore report many tile/sample/depth
+records collapsed into a smaller per-bounce histogram without losing the exact
+readback count.
 
 ## Worker and Frame Correlation
 

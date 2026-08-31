@@ -15,6 +15,9 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
   - (placeholder)
 
 - **Fixed**
+  - Fixed fixed-SPP telemetry admission so exact tile/sample/depth readback
+    record counts are preserved independently from the collapsed per-bounce
+    histogram while mismatched expected/captured records still fail closed.
   - (placeholder)
 
 - **Security**

@@ -184,7 +184,9 @@ export interface GpuFixedSppRayCountTelemetry {
   readonly secondaryRays: number | null;
   readonly totalPathSegments: number | null;
   readonly bounceHistogram: readonly number[];
+  /** GPU counter records captured before records are collapsed into bounce buckets. */
   readonly capturedRayCounts: number;
+  /** GPU counter records expected for the tile, sample, and depth schedule. */
   readonly expectedRayCounts: number;
   readonly reason: string | null;
 }

@@ -647,9 +647,14 @@ function normalizeFixedSppRayCounts(
     value.reason
   );
 
-  if (capturedRayCounts !== bounceHistogram.length) {
+  if (status === "available" && capturedRayCounts === 0) {
     throw new Error(
-      "fixedSpp.rayCounts.capturedRayCounts must match the bounce histogram length."
+      "available fixedSpp.rayCounts require at least one captured ray-count record."
+    );
+  }
+  if (status === "available" && capturedRayCounts !== expectedRayCounts) {
+    throw new Error(
+      "available fixedSpp.rayCounts capturedRayCounts must match expectedRayCounts."
     );
   }
   if (
