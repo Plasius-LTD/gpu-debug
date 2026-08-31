@@ -9,6 +9,20 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.6] - 2026-08-31
+
+- **Added**
   - Added bounded fixed-SPP renderer telemetry ingestion and summaries for ray
     counts, path segments, timing evidence, timestamp-query status, and telemetry
     memory without initiating GPU readbacks.
@@ -256,3 +270,4 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 [0.2.3]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.3
 [0.2.4]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.4
 [0.2.5]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.5
+[0.2.6]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.6
