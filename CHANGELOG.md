@@ -8,6 +8,20 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 
 ## [Unreleased]
 
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.9] - 2026-11-22
+
 - Refresh supported npm dependency and security tooling baselines; preserve runtime API contracts (weekly maintenance, 2026-11-22).
 
 - **Added**
@@ -312,3 +326,4 @@ The format is based on **[Keep a Changelog](https://keepachangelog.com/en/1.1.0/
 [0.2.6]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.6
 [0.2.7]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.7
 [0.2.8]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.8
+[0.2.9]: https://github.com/Plasius-LTD/gpu-debug/releases/tag/v0.2.9
